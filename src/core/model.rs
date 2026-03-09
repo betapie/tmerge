@@ -9,10 +9,16 @@ pub enum Block {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct ConflictSegment {
+    pub tag: Option<String>,
+    pub lines: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Conflict {
-    pub ours: Vec<String>,
-    pub base: Option<Vec<String>>,
-    pub theirs: Vec<String>,
+    pub ours: ConflictSegment,
+    pub base: Option<ConflictSegment>,
+    pub theirs: ConflictSegment,
     pub resolution: Option<Resolution>,
 }
 

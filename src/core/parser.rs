@@ -1,4 +1,7 @@
-use crate::core::model::{Block, Conflict, MergeFile};
+use crate::core::{
+    model::{Block, Conflict, ConflictSegment, MergeFile},
+    parser::markers::OURS_BEGIN,
+};
 
 mod markers {
     pub const OURS_BEGIN: &str = "<<<<<<<";
@@ -8,34 +11,56 @@ mod markers {
 }
 
 enum Marker {
-    OursBegin,
-    BaseBegin,
+    OursBegin(Option<String>),
+    BaseBegin(Option<String>),
     TheirsBegin,
-    ConflictEnd,
+    ConflictEnd(Option<String>),
     None,
 }
 
 impl Marker {
     fn from_str(line: &str) -> Self {
+        let get_tag = |line: &str| -> Option<String> {
+            if line.len() > OURS_BEGIN.len() + 1 {
+                Some(line[&OURS_BEGIN.len() + 1..].to_string())
+            } else {
+                None
+            }
+        };
         if line.starts_with(markers::OURS_BEGIN) {
-            Marker::OursBegin
+            Marker::OursBegin(get_tag(line))
         } else if line.starts_with(markers::BASE_BEGIN) {
-            Marker::BaseBegin
+            Marker::BaseBegin(get_tag(line))
         } else if line.starts_with(markers::THEIRS_BEGIN) {
             Marker::TheirsBegin
         } else if line.starts_with(markers::CONFLICT_END) {
-            Marker::ConflictEnd
+            Marker::ConflictEnd(get_tag(line))
         } else {
             Marker::None
         }
     }
 }
 
-#[derive(Default)]
 struct ConflictBuilder {
-    ours: Vec<String>,
-    base: Option<Vec<String>>,
-    theirs: Vec<String>,
+    ours: ConflictSegment,
+    base: Option<ConflictSegment>,
+    theirs: ConflictSegment,
+}
+
+impl ConflictBuilder {
+    fn new_empty() -> ConflictBuilder {
+        ConflictBuilder {
+            ours: ConflictSegment {
+                tag: None,
+                lines: Vec::new(),
+            },
+            base: None,
+            theirs: ConflictSegment {
+                tag: None,
+                lines: Vec::new(),
+            },
+        }
+    }
 }
 
 impl ConflictBuilder {
@@ -74,11 +99,13 @@ impl Parser {
             std::mem::replace(&mut self.state, ParseState::Regular(Vec::new())),
             Marker::from_str(&line),
         ) {
-            (ParseState::Regular(lines), Marker::OursBegin) => {
+            (ParseState::Regular(lines), Marker::OursBegin(tag)) => {
                 if !lines.is_empty() {
                     self.blocks.push(Block::Regular(lines));
                 }
-                ParseState::ParsingOurs(ConflictBuilder::default())
+                let mut conflict_builder = ConflictBuilder::new_empty();
+                conflict_builder.ours.tag = tag;
+                ParseState::ParsingOurs(conflict_builder)
             }
             (ParseState::Regular(mut lines), Marker::None) => {
                 lines.push(line);
@@ -88,10 +115,16 @@ impl Parser {
                 return Err(format!("Unexpected marker outside conflict: {}", line));
             }
 
-            (ParseState::ParsingOurs(cb), Marker::BaseBegin) => ParseState::ParsingBase(cb),
+            (ParseState::ParsingOurs(mut cb), Marker::BaseBegin(tag)) => {
+                cb.base = Some(ConflictSegment {
+                    tag,
+                    lines: Vec::new(),
+                });
+                ParseState::ParsingBase(cb)
+            }
             (ParseState::ParsingOurs(cb), Marker::TheirsBegin) => ParseState::ParsingTheirs(cb),
             (ParseState::ParsingOurs(mut cb), Marker::None) => {
-                cb.ours.push(line);
+                cb.ours.lines.push(line);
                 ParseState::ParsingOurs(cb)
             }
             (ParseState::ParsingOurs(_), _) => {
@@ -100,19 +133,21 @@ impl Parser {
 
             (ParseState::ParsingBase(cb), Marker::TheirsBegin) => ParseState::ParsingTheirs(cb),
             (ParseState::ParsingBase(mut cb), Marker::None) => {
-                cb.base.get_or_insert_with(Vec::new).push(line);
+                cb.base.as_mut().unwrap().lines.push(line);
                 ParseState::ParsingBase(cb)
             }
             (ParseState::ParsingBase(_), _) => {
                 return Err(format!("Unexpected marker in base section: {}", line));
             }
 
-            (ParseState::ParsingTheirs(cb), Marker::ConflictEnd) => {
+            (ParseState::ParsingTheirs(mut cb), Marker::ConflictEnd(tag)) => {
+                assert!(cb.theirs.tag.is_none());
+                cb.theirs.tag = tag;
                 self.blocks.push(Block::Conflict(cb.build()));
                 ParseState::Regular(Vec::new())
             }
             (ParseState::ParsingTheirs(mut cb), Marker::None) => {
-                cb.theirs.push(line);
+                cb.theirs.lines.push(line);
                 ParseState::ParsingTheirs(cb)
             }
             (ParseState::ParsingTheirs(_), _) => {
@@ -174,9 +209,15 @@ mod tests {
             String::from(">>>>>>> theirs:some_file.txt"),
         ];
         let expected_parsed = Some(Block::Conflict(Conflict {
-            ours: vec![String::from("  this would be"), String::from("ours here")],
+            ours: ConflictSegment {
+                tag: Some(String::from("yours:some_file.txt")),
+                lines: vec![String::from("  this would be"), String::from("ours here")],
+            },
             base: None,
-            theirs: vec![String::from(" and this is"), String::from("theirs")],
+            theirs: ConflictSegment {
+                tag: Some(String::from("theirs:some_file.txt")),
+                lines: vec![String::from(" and this is"), String::from("theirs")],
+            },
             resolution: None,
         }));
         TestBlock {
@@ -198,9 +239,18 @@ mod tests {
             String::from(">>>>>>> theirs:some_file.txt"),
         ];
         let expected_parsed = Some(Block::Conflict(Conflict {
-            ours: vec![String::from("  this would be"), String::from("ours here")],
-            base: Some(vec![String::from("This is base")]),
-            theirs: vec![String::from(" and this is"), String::from("theirs")],
+            ours: ConflictSegment {
+                tag: Some(String::from("yours:some_file.txt")),
+                lines: vec![String::from("  this would be"), String::from("ours here")],
+            },
+            base: Some(ConflictSegment {
+                tag: Some(String::from("base:some_file.txt")),
+                lines: vec![String::from("This is base")],
+            }),
+            theirs: ConflictSegment {
+                tag: Some(String::from("theirs:some_file.txt")),
+                lines: vec![String::from(" and this is"), String::from("theirs")],
+            },
             resolution: None,
         }));
         TestBlock {
@@ -414,18 +464,34 @@ mod tests {
         let expected_blocks = vec![
             Block::Regular(vec![String::from("This is a regular block")]),
             Block::Conflict(Conflict {
-                ours: vec![String::from("ours line 1"), String::from("ours line 2")],
+                ours: ConflictSegment {
+                    tag: Some(String::from("HEAD")),
+                    lines: vec![String::from("ours line 1"), String::from("ours line 2")],
+                },
                 base: None,
-                theirs: vec![String::from("theirs line 1")],
+                theirs: ConflictSegment {
+                    tag: Some(String::from("feature-branch")),
+
+                    lines: vec![String::from("theirs line 1")],
+                },
                 resolution: None,
             }),
             Block::Regular(vec![String::from(
                 "Another regular block between conflicts",
             )]),
             Block::Conflict(Conflict {
-                ours: vec![String::from("only ours")],
-                base: Some(vec![String::from("base content")]),
-                theirs: vec![String::from("only theirs")],
+                ours: ConflictSegment {
+                    tag: Some(String::from("HEAD")),
+                    lines: vec![String::from("only ours")],
+                },
+                base: Some(ConflictSegment {
+                    tag: Some(String::from("base")),
+                    lines: vec![String::from("base content")],
+                }),
+                theirs: ConflictSegment {
+                    tag: Some(String::from("feature-branch")),
+                    lines: vec![String::from("only theirs")],
+                },
                 resolution: None,
             }),
             Block::Regular(vec![String::from("Trailing regular block")]),
