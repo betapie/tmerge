@@ -117,78 +117,28 @@ impl Parser {
     pub fn consume(mut self, line: String) -> Result<Self, ParserError> {
         let marker = Marker::from_str(&line);
         let current_state = std::mem::replace(&mut self.state, ParseState::Regular(Vec::new()));
-        let mut blocks = self.blocks;
 
-        let new_state = match (current_state, marker) {
-            (ParseState::Regular(lines), Marker::OursBegin(tag)) => {
-                if !lines.is_empty() {
-                    blocks.push(Block::Regular(lines));
-                }
-                let mut conflict_builder = ConflictBuilder::new_empty();
-                conflict_builder.ours.tag = tag;
-                Ok(ParseState::ParsingOurs(conflict_builder))
+        let (new_state, added_block) = match current_state {
+            ParseState::Regular(current_lines) => {
+                consume_line_state_regular(current_lines, line, marker)?
             }
-            (ParseState::Regular(mut lines), Marker::None) => {
-                lines.push(line);
-                Ok(ParseState::Regular(lines))
+            ParseState::ParsingOurs(conflict_builder) => {
+                consume_line_state_parsing_ours(conflict_builder, line, marker)?
             }
-            (ParseState::Regular(_), _) => Err(ParserError::new(format!(
-                "Unexpected marker outside conflict: {}",
-                line
-            ))),
-
-            (ParseState::ParsingOurs(mut cb), Marker::BaseBegin(tag)) => {
-                cb.base = Some(ConflictSegment {
-                    tag,
-                    lines: Vec::new(),
-                });
-                Ok(ParseState::ParsingBase(cb))
+            ParseState::ParsingBase(conflict_builder) => {
+                consume_line_state_parsing_base(conflict_builder, line, marker)?
             }
-            (ParseState::ParsingOurs(cb), Marker::TheirsBegin) => Ok(ParseState::ParsingTheirs(cb)),
-            (ParseState::ParsingOurs(mut cb), Marker::None) => {
-                cb.ours.lines.push(line);
-                Ok(ParseState::ParsingOurs(cb))
+            ParseState::ParsingTheirs(conflict_builder) => {
+                consume_line_state_parsing_theirs(conflict_builder, line, marker)?
             }
-            (ParseState::ParsingOurs(_), _) => Err(ParserError::new(format!(
-                "Unexpected marker in ours section: {}",
-                line
-            ))),
-
-            (ParseState::ParsingBase(cb), Marker::TheirsBegin) => Ok(ParseState::ParsingTheirs(cb)),
-            (ParseState::ParsingBase(mut cb), Marker::None) => {
-                cb.base.as_mut().unwrap().lines.push(line);
-                Ok(ParseState::ParsingBase(cb))
-            }
-            (ParseState::ParsingBase(_), _) => Err(ParserError::new(format!(
-                "Unexpected marker in base section: {}",
-                line
-            ))),
-
-            (ParseState::ParsingTheirs(mut cb), Marker::ConflictEnd(tag)) => {
-                assert!(cb.theirs.tag.is_none());
-                cb.theirs.tag = tag;
-                blocks.push(Block::Conflict(cb.build()));
-                Ok(ParseState::Regular(Vec::new()))
-            }
-            (ParseState::ParsingTheirs(mut cb), Marker::None) => {
-                cb.theirs.lines.push(line);
-                Ok(ParseState::ParsingTheirs(cb))
-            }
-            (ParseState::ParsingTheirs(_), _) => Err(ParserError::new(format!(
-                "Unexpected marker in theirs section: {}",
-                line
-            ))),
         };
 
-        match new_state {
-            Ok(new_state) => Ok(Self {
-                blocks,
-                state: new_state,
-            }),
-            Err(e) => {
-                Err(e)
-            }
+        if let Some(added_block) = added_block {
+            self.blocks.push(added_block);
         }
+        self.state = new_state;
+
+        Ok(self)
     }
 
     pub fn into_merge_file(self) -> Result<MergeFile, ParserError> {
@@ -207,6 +157,102 @@ impl Parser {
     }
 }
 
+fn consume_line_state_regular(
+    current_lines: Vec<String>,
+    new_line: String,
+    marker: Marker,
+) -> Result<(ParseState, Option<Block>), ParserError> {
+    match marker {
+        Marker::OursBegin(tag) => {
+            let created_block =
+                (!current_lines.is_empty()).then_some(Block::Regular(current_lines));
+            let mut cb = ConflictBuilder::new_empty();
+            cb.ours.tag = tag;
+            Ok((ParseState::ParsingOurs(cb), created_block))
+        }
+        Marker::None => {
+            let mut lines = current_lines;
+            lines.push(new_line);
+            Ok((ParseState::Regular(lines), None))
+        }
+        _ => Err(ParserError::new(format!(
+            "Unexpected marker outside of conflict: {}",
+            new_line
+        ))),
+    }
+}
+
+fn consume_line_state_parsing_ours(
+    conflict_builder: ConflictBuilder,
+    new_line: String,
+    marker: Marker,
+) -> Result<(ParseState, Option<Block>), ParserError> {
+    match marker {
+        Marker::BaseBegin(tag) => {
+            let mut conflict_builder = conflict_builder;
+            conflict_builder.base = Some(ConflictSegment {
+                tag,
+                lines: Vec::new(),
+            });
+            Ok((ParseState::ParsingBase(conflict_builder), None))
+        }
+        Marker::TheirsBegin => Ok((ParseState::ParsingTheirs(conflict_builder), None)),
+        Marker::None => {
+            let mut conflict_builder = conflict_builder;
+            conflict_builder.ours.lines.push(new_line);
+            Ok((ParseState::ParsingOurs(conflict_builder), None))
+        }
+        _ => Err(ParserError::new(format!(
+            "Unexpected marker in OURS section: {}",
+            new_line
+        ))),
+    }
+}
+
+fn consume_line_state_parsing_base(
+    conflict_builder: ConflictBuilder,
+    new_line: String,
+    marker: Marker,
+) -> Result<(ParseState, Option<Block>), ParserError> {
+    match marker {
+        Marker::TheirsBegin => Ok((ParseState::ParsingTheirs(conflict_builder), None)),
+        Marker::None => {
+            let mut conflict_builder = conflict_builder;
+            conflict_builder.base.as_mut().unwrap().lines.push(new_line);
+            Ok((ParseState::ParsingBase(conflict_builder), None))
+        }
+        _ => Err(ParserError::new(format!(
+            "Unexpected marker in BASE section: {}",
+            new_line
+        ))),
+    }
+}
+
+fn consume_line_state_parsing_theirs(
+    conflict_builder: ConflictBuilder,
+    new_line: String,
+    marker: Marker,
+) -> Result<(ParseState, Option<Block>), ParserError> {
+    match marker {
+        Marker::ConflictEnd(tag) => {
+            let mut conflict_builder = conflict_builder;
+            conflict_builder.theirs.tag = tag;
+            Ok((
+                ParseState::Regular(Vec::new()),
+                Some(Block::Conflict(conflict_builder.build())),
+            ))
+        }
+        Marker::None => {
+            let mut conflict_builder = conflict_builder;
+            conflict_builder.theirs.lines.push(new_line);
+            Ok((ParseState::ParsingTheirs(conflict_builder), None))
+        }
+        _ => Err(ParserError::new(format!(
+            "Unexpected marker in THEIRS section: {}",
+            new_line
+        ))),
+    }
+}
 #[cfg(test)]
 mod tests {
     use crate::core::model::Block;
