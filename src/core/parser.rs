@@ -1,15 +1,6 @@
-use crate::core::{
-    model::{Block, Conflict, ConflictSegment, MergeFile},
-    parser::markers::OURS_BEGIN,
-};
+use crate::core::constants::markers;
+use crate::core::model::{Block, Conflict, ConflictSegment, MergeFile};
 use std::fmt;
-
-mod markers {
-    pub const OURS_BEGIN: &str = "<<<<<<<";
-    pub const BASE_BEGIN: &str = "|||||||";
-    pub const THEIRS_BEGIN: &str = "=======";
-    pub const CONFLICT_END: &str = ">>>>>>>";
-}
 
 enum ParsedLine {
     OursBegin(Option<String>),
@@ -22,8 +13,8 @@ enum ParsedLine {
 impl ParsedLine {
     fn from_str(line: String) -> Self {
         let get_tag = |line: String| -> Option<String> {
-            if line.len() > OURS_BEGIN.len() + 1 {
-                Some(line[&OURS_BEGIN.len() + 1..].to_string())
+            if line.len() > markers::OURS_BEGIN.len() + 1 {
+                Some(line[&markers::OURS_BEGIN.len() + 1..].to_string())
             } else {
                 None
             }
@@ -123,7 +114,7 @@ impl ParseError {
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Parser error: {}", self.message)
+        write!(f, "Parse error: {}", self.message)
     }
 }
 
@@ -280,7 +271,10 @@ fn consume_line_state_parsing_theirs(
 
 #[cfg(test)]
 mod tests {
-    use crate::core::{model::Block, test_helpers};
+    use crate::core::{
+        model::Block,
+        test_helpers::{self},
+    };
 
     use super::*;
 
@@ -499,59 +493,10 @@ mod tests {
 
     #[test]
     fn parse_lines_with_mixed_blocks_produces_expected() -> Result<(), ParseError> {
-        let input_lines = vec![
-            String::from("This is a regular block"),
-            String::from("<<<<<<< HEAD"),
-            String::from("ours line 1"),
-            String::from("ours line 2"),
-            String::from("======="),
-            String::from("theirs line 1"),
-            String::from(">>>>>>> feature-branch"),
-            String::from("Another regular block between conflicts"),
-            String::from("<<<<<<< HEAD"),
-            String::from("only ours"),
-            String::from("||||||| base"),
-            String::from("base content"),
-            String::from("======="),
-            String::from("only theirs"),
-            String::from(">>>>>>> feature-branch"),
-            String::from("Trailing regular block"),
-        ];
-        let expected_blocks = vec![
-            Block::Regular(vec![String::from("This is a regular block")]),
-            Block::Conflict(Conflict {
-                ours: ConflictSegment {
-                    tag: Some(String::from("HEAD")),
-                    lines: vec![String::from("ours line 1"), String::from("ours line 2")],
-                },
-                base: None,
-                theirs: ConflictSegment {
-                    tag: Some(String::from("feature-branch")),
-
-                    lines: vec![String::from("theirs line 1")],
-                },
-                resolution: None,
-            }),
-            Block::Regular(vec![String::from(
-                "Another regular block between conflicts",
-            )]),
-            Block::Conflict(Conflict {
-                ours: ConflictSegment {
-                    tag: Some(String::from("HEAD")),
-                    lines: vec![String::from("only ours")],
-                },
-                base: Some(ConflictSegment {
-                    tag: Some(String::from("base")),
-                    lines: vec![String::from("base content")],
-                }),
-                theirs: ConflictSegment {
-                    tag: Some(String::from("feature-branch")),
-                    lines: vec![String::from("only theirs")],
-                },
-                resolution: None,
-            }),
-            Block::Regular(vec![String::from("Trailing regular block")]),
-        ];
+        let test_helpers::TestMergeFile {
+            raw_lines: input_lines,
+            parsed: expected_parsed,
+        } = test_helpers::make_mixed_test_merge_file();
 
         let mut parser = Parser::new();
         for line in input_lines {
@@ -559,11 +504,11 @@ mod tests {
         }
         let merge_file = parser.into_merge_file()?;
 
-        assert_eq!(merge_file.blocks.len(), expected_blocks.len());
+        assert_eq!(merge_file.blocks.len(), expected_parsed.blocks.len());
         for (parsed_block, expected_block) in merge_file
             .blocks
             .into_iter()
-            .zip(expected_blocks.into_iter())
+            .zip(expected_parsed.blocks.into_iter())
         {
             assert_eq!(parsed_block, expected_block);
         }
