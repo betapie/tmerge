@@ -111,23 +111,23 @@ enum ParseState {
 }
 
 #[derive(Debug)]
-pub struct ParserError {
+pub struct ParseError {
     pub message: String,
 }
 
-impl ParserError {
-    fn new(message: String) -> ParserError {
-        ParserError { message }
+impl ParseError {
+    fn new(message: String) -> ParseError {
+        ParseError { message }
     }
 }
 
-impl fmt::Display for ParserError {
+impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Parser error: {}", self.message)
     }
 }
 
-impl std::error::Error for ParserError {}
+impl std::error::Error for ParseError {}
 
 pub struct Parser {
     blocks: Vec<Block>,
@@ -142,7 +142,7 @@ impl Parser {
         }
     }
 
-    pub fn consume(mut self, line: String) -> Result<Self, ParserError> {
+    pub fn consume(mut self, line: String) -> Result<Self, ParseError> {
         let parsed_line = ParsedLine::from_str(line);
         let current_state = std::mem::replace(&mut self.state, ParseState::Regular(Vec::new()));
 
@@ -169,7 +169,7 @@ impl Parser {
         Ok(self)
     }
 
-    pub fn into_merge_file(self) -> Result<MergeFile, ParserError> {
+    pub fn into_merge_file(self) -> Result<MergeFile, ParseError> {
         let (state, mut blocks) = (self.state, self.blocks);
         match state {
             ParseState::Regular(lines) => {
@@ -178,7 +178,7 @@ impl Parser {
                 }
             }
             _ => {
-                return Err(ParserError::new(String::from("Still in conflict block")));
+                return Err(ParseError::new(String::from("Still in conflict block")));
             }
         }
         Ok(MergeFile { blocks })
@@ -188,7 +188,7 @@ impl Parser {
 fn consume_line_state_regular(
     current_lines: Vec<String>,
     parsed_line: ParsedLine,
-) -> Result<(ParseState, Option<Block>), ParserError> {
+) -> Result<(ParseState, Option<Block>), ParseError> {
     match parsed_line {
         ParsedLine::OursBegin(tag) => {
             let created_block =
@@ -202,7 +202,7 @@ fn consume_line_state_regular(
             lines.push(line);
             Ok((ParseState::Regular(lines), None))
         }
-        _ => Err(ParserError::new(format!(
+        _ => Err(ParseError::new(format!(
             "Unexpected marker outside of conflict: {}",
             parsed_line.into_str()
         ))),
@@ -212,7 +212,7 @@ fn consume_line_state_regular(
 fn consume_line_state_parsing_ours(
     conflict_builder: ConflictBuilder,
     parsed_line: ParsedLine,
-) -> Result<(ParseState, Option<Block>), ParserError> {
+) -> Result<(ParseState, Option<Block>), ParseError> {
     match parsed_line {
         ParsedLine::BaseBegin(tag) => {
             let mut conflict_builder = conflict_builder;
@@ -228,7 +228,7 @@ fn consume_line_state_parsing_ours(
             conflict_builder.ours.lines.push(line);
             Ok((ParseState::ParsingOurs(conflict_builder), None))
         }
-        _ => Err(ParserError::new(format!(
+        _ => Err(ParseError::new(format!(
             "Unexpected marker in OURS section: {}",
             parsed_line.into_str()
         ))),
@@ -238,7 +238,7 @@ fn consume_line_state_parsing_ours(
 fn consume_line_state_parsing_base(
     conflict_builder: ConflictBuilder,
     parsed_line: ParsedLine,
-) -> Result<(ParseState, Option<Block>), ParserError> {
+) -> Result<(ParseState, Option<Block>), ParseError> {
     match parsed_line {
         ParsedLine::TheirsBegin => Ok((ParseState::ParsingTheirs(conflict_builder), None)),
         ParsedLine::Plain(line) => {
@@ -246,7 +246,7 @@ fn consume_line_state_parsing_base(
             conflict_builder.base.as_mut().unwrap().lines.push(line);
             Ok((ParseState::ParsingBase(conflict_builder), None))
         }
-        _ => Err(ParserError::new(format!(
+        _ => Err(ParseError::new(format!(
             "Unexpected marker in BASE section: {}",
             parsed_line.into_str()
         ))),
@@ -256,7 +256,7 @@ fn consume_line_state_parsing_base(
 fn consume_line_state_parsing_theirs(
     conflict_builder: ConflictBuilder,
     parsed_line: ParsedLine,
-) -> Result<(ParseState, Option<Block>), ParserError> {
+) -> Result<(ParseState, Option<Block>), ParseError> {
     match parsed_line {
         ParsedLine::ConflictEnd(tag) => {
             let mut conflict_builder = conflict_builder;
@@ -271,7 +271,7 @@ fn consume_line_state_parsing_theirs(
             conflict_builder.theirs.lines.push(line);
             Ok((ParseState::ParsingTheirs(conflict_builder), None))
         }
-        _ => Err(ParserError::new(format!(
+        _ => Err(ParseError::new(format!(
             "Unexpected marker in THEIRS section: {}",
             parsed_line.into_str()
         ))),
@@ -315,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn into_merge_file_on_new_parser_returns_file_with_no_blocks() -> Result<(), ParserError> {
+    fn into_merge_file_on_new_parser_returns_file_with_no_blocks() -> Result<(), ParseError> {
         let parser = Parser::new();
         let merge_file = parser.into_merge_file()?;
         assert!(merge_file.blocks.is_empty());
@@ -324,7 +324,7 @@ mod tests {
 
     #[test]
     fn parse_on_input_without_conflicts_creates_file_with_single_regular_block()
-    -> Result<(), ParserError> {
+    -> Result<(), ParseError> {
         let TestBlock {
             input_lines,
             expected_parsed,
@@ -344,7 +344,7 @@ mod tests {
 
     #[test]
     fn parse_on_input_with_single_conflict_creates_file_with_single_conflict_block()
-    -> Result<(), ParserError> {
+    -> Result<(), ParseError> {
         let TestBlock {
             input_lines,
             expected_parsed,
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn parse_on_input_with_single_diff3_conflict_creates_file_with_single_conflict_block()
-    -> Result<(), ParserError> {
+    -> Result<(), ParseError> {
         let TestBlock {
             input_lines,
             expected_parsed,
@@ -383,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn consume_on_invalid_conflict_block_returns_error() -> Result<(), ParserError> {
+    fn consume_on_invalid_conflict_block_returns_error() -> Result<(), ParseError> {
         let input = [
             String::from("<<<<<<< yours:some_file.txt"),
             String::from("  this would be"),
@@ -401,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn into_merge_file_with_unfinished_conflict_block_returns_error() -> Result<(), ParserError> {
+    fn into_merge_file_with_unfinished_conflict_block_returns_error() -> Result<(), ParseError> {
         let input = [
             String::from("<<<<<<< yours:some_file.txt"),
             String::from("  this would be"),
@@ -419,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_lines_with_regular_then_conflict_block_produces_expected() -> Result<(), ParserError> {
+    fn parse_lines_with_regular_then_conflict_block_produces_expected() -> Result<(), ParseError> {
         let mut input_lines = Vec::new();
         let mut expected_blocks = Vec::new();
 
@@ -445,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_lines_with_conflict_then_regular_block_produces_expected() -> Result<(), ParserError> {
+    fn parse_lines_with_conflict_then_regular_block_produces_expected() -> Result<(), ParseError> {
         let mut input_lines = Vec::new();
         let mut expected_blocks = Vec::new();
 
@@ -472,7 +472,7 @@ mod tests {
 
     #[test]
     fn parse_lines_with_two_consecutive_conflict_blocks_produces_expected()
-    -> Result<(), ParserError> {
+    -> Result<(), ParseError> {
         let mut input_lines = Vec::new();
         let mut expected_blocks = Vec::new();
 
@@ -498,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_lines_with_mixed_blocks_produces_expected() -> Result<(), ParserError> {
+    fn parse_lines_with_mixed_blocks_produces_expected() -> Result<(), ParseError> {
         let input_lines = vec![
             String::from("This is a regular block"),
             String::from("<<<<<<< HEAD"),
