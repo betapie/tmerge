@@ -11,17 +11,17 @@ mod markers {
     pub const CONFLICT_END: &str = ">>>>>>>";
 }
 
-enum Marker {
+enum ParsedLine {
     OursBegin(Option<String>),
     BaseBegin(Option<String>),
     TheirsBegin,
     ConflictEnd(Option<String>),
-    None,
+    Plain(String),
 }
 
-impl Marker {
-    fn from_str(line: &str) -> Self {
-        let get_tag = |line: &str| -> Option<String> {
+impl ParsedLine {
+    fn from_str(line: String) -> Self {
+        let get_tag = |line: String| -> Option<String> {
             if line.len() > OURS_BEGIN.len() + 1 {
                 Some(line[&OURS_BEGIN.len() + 1..].to_string())
             } else {
@@ -29,15 +29,43 @@ impl Marker {
             }
         };
         if line.starts_with(markers::OURS_BEGIN) {
-            Marker::OursBegin(get_tag(line))
+            ParsedLine::OursBegin(get_tag(line))
         } else if line.starts_with(markers::BASE_BEGIN) {
-            Marker::BaseBegin(get_tag(line))
+            ParsedLine::BaseBegin(get_tag(line))
         } else if line.starts_with(markers::THEIRS_BEGIN) {
-            Marker::TheirsBegin
+            ParsedLine::TheirsBegin
         } else if line.starts_with(markers::CONFLICT_END) {
-            Marker::ConflictEnd(get_tag(line))
+            ParsedLine::ConflictEnd(get_tag(line))
         } else {
-            Marker::None
+            ParsedLine::Plain(line)
+        }
+    }
+
+    fn into_str(self) -> String {
+        match self {
+            ParsedLine::OursBegin(tag) => {
+                if let Some(tag) = tag {
+                    format!("{} {}", markers::OURS_BEGIN, tag)
+                } else {
+                    markers::OURS_BEGIN.into()
+                }
+            }
+            ParsedLine::BaseBegin(tag) => {
+                if let Some(tag) = tag {
+                    format!("{} {}", markers::BASE_BEGIN, tag)
+                } else {
+                    markers::BASE_BEGIN.into()
+                }
+            }
+            ParsedLine::TheirsBegin => markers::THEIRS_BEGIN.into(),
+            ParsedLine::ConflictEnd(tag) => {
+                if let Some(tag) = tag {
+                    format!("{} {}", markers::CONFLICT_END, tag)
+                } else {
+                    markers::CONFLICT_END.into()
+                }
+            }
+            ParsedLine::Plain(line) => line,
         }
     }
 }
@@ -115,21 +143,21 @@ impl Parser {
     }
 
     pub fn consume(mut self, line: String) -> Result<Self, ParserError> {
-        let marker = Marker::from_str(&line);
+        let parsed_line = ParsedLine::from_str(line);
         let current_state = std::mem::replace(&mut self.state, ParseState::Regular(Vec::new()));
 
         let (new_state, added_block) = match current_state {
             ParseState::Regular(current_lines) => {
-                consume_line_state_regular(current_lines, line, marker)?
+                consume_line_state_regular(current_lines, parsed_line)?
             }
             ParseState::ParsingOurs(conflict_builder) => {
-                consume_line_state_parsing_ours(conflict_builder, line, marker)?
+                consume_line_state_parsing_ours(conflict_builder, parsed_line)?
             }
             ParseState::ParsingBase(conflict_builder) => {
-                consume_line_state_parsing_base(conflict_builder, line, marker)?
+                consume_line_state_parsing_base(conflict_builder, parsed_line)?
             }
             ParseState::ParsingTheirs(conflict_builder) => {
-                consume_line_state_parsing_theirs(conflict_builder, line, marker)?
+                consume_line_state_parsing_theirs(conflict_builder, parsed_line)?
             }
         };
 
@@ -159,36 +187,34 @@ impl Parser {
 
 fn consume_line_state_regular(
     current_lines: Vec<String>,
-    new_line: String,
-    marker: Marker,
+    parsed_line: ParsedLine,
 ) -> Result<(ParseState, Option<Block>), ParserError> {
-    match marker {
-        Marker::OursBegin(tag) => {
+    match parsed_line {
+        ParsedLine::OursBegin(tag) => {
             let created_block =
                 (!current_lines.is_empty()).then_some(Block::Regular(current_lines));
             let mut cb = ConflictBuilder::new_empty();
             cb.ours.tag = tag;
             Ok((ParseState::ParsingOurs(cb), created_block))
         }
-        Marker::None => {
+        ParsedLine::Plain(line) => {
             let mut lines = current_lines;
-            lines.push(new_line);
+            lines.push(line);
             Ok((ParseState::Regular(lines), None))
         }
         _ => Err(ParserError::new(format!(
             "Unexpected marker outside of conflict: {}",
-            new_line
+            parsed_line.into_str()
         ))),
     }
 }
 
 fn consume_line_state_parsing_ours(
     conflict_builder: ConflictBuilder,
-    new_line: String,
-    marker: Marker,
+    parsed_line: ParsedLine,
 ) -> Result<(ParseState, Option<Block>), ParserError> {
-    match marker {
-        Marker::BaseBegin(tag) => {
+    match parsed_line {
+        ParsedLine::BaseBegin(tag) => {
             let mut conflict_builder = conflict_builder;
             conflict_builder.base = Some(ConflictSegment {
                 tag,
@@ -196,45 +222,43 @@ fn consume_line_state_parsing_ours(
             });
             Ok((ParseState::ParsingBase(conflict_builder), None))
         }
-        Marker::TheirsBegin => Ok((ParseState::ParsingTheirs(conflict_builder), None)),
-        Marker::None => {
+        ParsedLine::TheirsBegin => Ok((ParseState::ParsingTheirs(conflict_builder), None)),
+        ParsedLine::Plain(line) => {
             let mut conflict_builder = conflict_builder;
-            conflict_builder.ours.lines.push(new_line);
+            conflict_builder.ours.lines.push(line);
             Ok((ParseState::ParsingOurs(conflict_builder), None))
         }
         _ => Err(ParserError::new(format!(
             "Unexpected marker in OURS section: {}",
-            new_line
+            parsed_line.into_str()
         ))),
     }
 }
 
 fn consume_line_state_parsing_base(
     conflict_builder: ConflictBuilder,
-    new_line: String,
-    marker: Marker,
+    parsed_line: ParsedLine,
 ) -> Result<(ParseState, Option<Block>), ParserError> {
-    match marker {
-        Marker::TheirsBegin => Ok((ParseState::ParsingTheirs(conflict_builder), None)),
-        Marker::None => {
+    match parsed_line {
+        ParsedLine::TheirsBegin => Ok((ParseState::ParsingTheirs(conflict_builder), None)),
+        ParsedLine::Plain(line) => {
             let mut conflict_builder = conflict_builder;
-            conflict_builder.base.as_mut().unwrap().lines.push(new_line);
+            conflict_builder.base.as_mut().unwrap().lines.push(line);
             Ok((ParseState::ParsingBase(conflict_builder), None))
         }
         _ => Err(ParserError::new(format!(
             "Unexpected marker in BASE section: {}",
-            new_line
+            parsed_line.into_str()
         ))),
     }
 }
 
 fn consume_line_state_parsing_theirs(
     conflict_builder: ConflictBuilder,
-    new_line: String,
-    marker: Marker,
+    parsed_line: ParsedLine,
 ) -> Result<(ParseState, Option<Block>), ParserError> {
-    match marker {
-        Marker::ConflictEnd(tag) => {
+    match parsed_line {
+        ParsedLine::ConflictEnd(tag) => {
             let mut conflict_builder = conflict_builder;
             conflict_builder.theirs.tag = tag;
             Ok((
@@ -242,17 +266,18 @@ fn consume_line_state_parsing_theirs(
                 Some(Block::Conflict(conflict_builder.build())),
             ))
         }
-        Marker::None => {
+        ParsedLine::Plain(line) => {
             let mut conflict_builder = conflict_builder;
-            conflict_builder.theirs.lines.push(new_line);
+            conflict_builder.theirs.lines.push(line);
             Ok((ParseState::ParsingTheirs(conflict_builder), None))
         }
         _ => Err(ParserError::new(format!(
             "Unexpected marker in THEIRS section: {}",
-            new_line
+            parsed_line.into_str()
         ))),
     }
 }
+
 #[cfg(test)]
 mod tests {
     use crate::core::model::Block;
