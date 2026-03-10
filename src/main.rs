@@ -10,7 +10,7 @@ fn main() {
     let reader = std::io::BufReader::new(f);
     let mut parser = Parser::new();
     for line in reader.lines() {
-        parser.consume(line.unwrap()).unwrap();
+        parser = parser.consume(line.unwrap()).unwrap();
     }
     let merge_file = parser.into_merge_file().unwrap();
     let mut num_conflict_blocks = 0;

@@ -114,79 +114,81 @@ impl Parser {
         }
     }
 
-    pub fn consume(&mut self, line: String) -> Result<(), ParserError> {
-        self.state = match (
-            std::mem::replace(&mut self.state, ParseState::Regular(Vec::new())),
-            Marker::from_str(&line),
-        ) {
+    pub fn consume(mut self, line: String) -> Result<Self, ParserError> {
+        let marker = Marker::from_str(&line);
+        let current_state = std::mem::replace(&mut self.state, ParseState::Regular(Vec::new()));
+        let mut blocks = self.blocks;
+
+        let new_state = match (current_state, marker) {
             (ParseState::Regular(lines), Marker::OursBegin(tag)) => {
                 if !lines.is_empty() {
-                    self.blocks.push(Block::Regular(lines));
+                    blocks.push(Block::Regular(lines));
                 }
                 let mut conflict_builder = ConflictBuilder::new_empty();
                 conflict_builder.ours.tag = tag;
-                ParseState::ParsingOurs(conflict_builder)
+                Ok(ParseState::ParsingOurs(conflict_builder))
             }
             (ParseState::Regular(mut lines), Marker::None) => {
                 lines.push(line);
-                ParseState::Regular(lines)
+                Ok(ParseState::Regular(lines))
             }
-            (ParseState::Regular(_), _) => {
-                return Err(ParserError::new(format!(
-                    "Unexpected marker outside conflict: {}",
-                    line
-                )));
-            }
+            (ParseState::Regular(_), _) => Err(ParserError::new(format!(
+                "Unexpected marker outside conflict: {}",
+                line
+            ))),
 
             (ParseState::ParsingOurs(mut cb), Marker::BaseBegin(tag)) => {
                 cb.base = Some(ConflictSegment {
                     tag,
                     lines: Vec::new(),
                 });
-                ParseState::ParsingBase(cb)
+                Ok(ParseState::ParsingBase(cb))
             }
-            (ParseState::ParsingOurs(cb), Marker::TheirsBegin) => ParseState::ParsingTheirs(cb),
+            (ParseState::ParsingOurs(cb), Marker::TheirsBegin) => Ok(ParseState::ParsingTheirs(cb)),
             (ParseState::ParsingOurs(mut cb), Marker::None) => {
                 cb.ours.lines.push(line);
-                ParseState::ParsingOurs(cb)
+                Ok(ParseState::ParsingOurs(cb))
             }
-            (ParseState::ParsingOurs(_), _) => {
-                return Err(ParserError::new(format!(
-                    "Unexpected marker in ours section: {}",
-                    line
-                )));
-            }
+            (ParseState::ParsingOurs(_), _) => Err(ParserError::new(format!(
+                "Unexpected marker in ours section: {}",
+                line
+            ))),
 
-            (ParseState::ParsingBase(cb), Marker::TheirsBegin) => ParseState::ParsingTheirs(cb),
+            (ParseState::ParsingBase(cb), Marker::TheirsBegin) => Ok(ParseState::ParsingTheirs(cb)),
             (ParseState::ParsingBase(mut cb), Marker::None) => {
                 cb.base.as_mut().unwrap().lines.push(line);
-                ParseState::ParsingBase(cb)
+                Ok(ParseState::ParsingBase(cb))
             }
-            (ParseState::ParsingBase(_), _) => {
-                return Err(ParserError::new(format!(
-                    "Unexpected marker in base section: {}",
-                    line
-                )));
-            }
+            (ParseState::ParsingBase(_), _) => Err(ParserError::new(format!(
+                "Unexpected marker in base section: {}",
+                line
+            ))),
 
             (ParseState::ParsingTheirs(mut cb), Marker::ConflictEnd(tag)) => {
                 assert!(cb.theirs.tag.is_none());
                 cb.theirs.tag = tag;
-                self.blocks.push(Block::Conflict(cb.build()));
-                ParseState::Regular(Vec::new())
+                blocks.push(Block::Conflict(cb.build()));
+                Ok(ParseState::Regular(Vec::new()))
             }
             (ParseState::ParsingTheirs(mut cb), Marker::None) => {
                 cb.theirs.lines.push(line);
-                ParseState::ParsingTheirs(cb)
+                Ok(ParseState::ParsingTheirs(cb))
             }
-            (ParseState::ParsingTheirs(_), _) => {
-                return Err(ParserError::new(format!(
-                    "Unexpected marker in theirs section: {}",
-                    line
-                )));
-            }
+            (ParseState::ParsingTheirs(_), _) => Err(ParserError::new(format!(
+                "Unexpected marker in theirs section: {}",
+                line
+            ))),
         };
-        Ok(())
+
+        match new_state {
+            Ok(new_state) => Ok(Self {
+                blocks,
+                state: new_state,
+            }),
+            Err(e) => {
+                Err(e)
+            }
+        }
     }
 
     pub fn into_merge_file(self) -> Result<MergeFile, ParserError> {
@@ -308,7 +310,7 @@ mod tests {
         } = make_regular_test_block();
         let mut parser = Parser::new();
         for line in input_lines {
-            parser.consume(line.to_string())?;
+            parser = parser.consume(line.to_string())?;
         }
 
         let merge_file = parser.into_merge_file()?;
@@ -328,7 +330,7 @@ mod tests {
         } = make_diff2_conflict_test_block();
         let mut parser = Parser::new();
         for line in input_lines {
-            parser.consume(line)?;
+            parser = parser.consume(line)?;
         }
 
         let merge_file = parser.into_merge_file()?;
@@ -348,7 +350,7 @@ mod tests {
         } = make_diff3_conflict_test_block();
         let mut parser = Parser::new();
         for line in input_lines {
-            parser.consume(line)?;
+            parser = parser.consume(line)?;
         }
 
         let merge_file = parser.into_merge_file()?;
@@ -371,7 +373,7 @@ mod tests {
         ];
         let mut parser = Parser::new();
         for line in input {
-            parser.consume(line)?;
+            parser = parser.consume(line)?;
         }
         assert!(parser.consume(markers::BASE_BEGIN.into()).is_err());
         Ok(())
@@ -389,7 +391,7 @@ mod tests {
         ];
         let mut parser = Parser::new();
         for line in input {
-            parser.consume(line)?;
+            parser = parser.consume(line)?;
         }
         assert!(parser.into_merge_file().is_err());
         Ok(())
@@ -410,7 +412,7 @@ mod tests {
 
         let mut parser = Parser::new();
         for line in input_lines {
-            parser.consume(line)?;
+            parser = parser.consume(line)?;
         }
         let merge_file = parser.into_merge_file()?;
 
@@ -436,7 +438,7 @@ mod tests {
 
         let mut parser = Parser::new();
         for line in input_lines {
-            parser.consume(line)?;
+            parser = parser.consume(line)?;
         }
         let merge_file = parser.into_merge_file()?;
 
@@ -448,7 +450,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_lines_with_two_consecutive_conflict_blocks_produces_expected() -> Result<(), ParserError> {
+    fn parse_lines_with_two_consecutive_conflict_blocks_produces_expected()
+    -> Result<(), ParserError> {
         let mut input_lines = Vec::new();
         let mut expected_blocks = Vec::new();
 
@@ -462,7 +465,7 @@ mod tests {
 
         let mut parser = Parser::new();
         for line in input_lines {
-            parser.consume(line)?;
+            parser = parser.consume(line)?;
         }
         let merge_file = parser.into_merge_file()?;
 
@@ -531,7 +534,7 @@ mod tests {
 
         let mut parser = Parser::new();
         for line in input_lines {
-            parser.consume(line)?;
+            parser = parser.consume(line)?;
         }
         let merge_file = parser.into_merge_file()?;
 
