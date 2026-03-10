@@ -280,23 +280,18 @@ fn consume_line_state_parsing_theirs(
 
 #[cfg(test)]
 mod tests {
-    use crate::core::model::Block;
+    use crate::core::{model::Block, test_helpers};
 
     use super::*;
 
     struct TestBlock {
         input_lines: Vec<String>,
-        expected_parsed: Option<Block>,
+        expected_parsed: Block,
     }
 
     fn make_regular_test_block() -> TestBlock {
-        let input_lines = vec![
-            String::from("Some regular"),
-            String::from("  file, without   "),
-            String::from("any confl"),
-            String::from("icts"),
-        ];
-        let expected_parsed = Some(Block::Regular(input_lines.clone()));
+        let input_lines = test_helpers::make_regular_block();
+        let expected_parsed = Block::Regular(input_lines.clone());
         TestBlock {
             input_lines,
             expected_parsed,
@@ -304,63 +299,18 @@ mod tests {
     }
 
     fn make_diff2_conflict_test_block() -> TestBlock {
-        let input_lines = vec![
-            String::from("<<<<<<< yours:some_file.txt"),
-            String::from("  this would be"),
-            String::from("ours here"),
-            String::from("======="),
-            String::from(" and this is"),
-            String::from("theirs"),
-            String::from(">>>>>>> theirs:some_file.txt"),
-        ];
-        let expected_parsed = Some(Block::Conflict(Conflict {
-            ours: ConflictSegment {
-                tag: Some(String::from("yours:some_file.txt")),
-                lines: vec![String::from("  this would be"), String::from("ours here")],
-            },
-            base: None,
-            theirs: ConflictSegment {
-                tag: Some(String::from("theirs:some_file.txt")),
-                lines: vec![String::from(" and this is"), String::from("theirs")],
-            },
-            resolution: None,
-        }));
+        let test_helpers::TestConflict { raw_lines, parsed } = test_helpers::make_diff2_conflict();
         TestBlock {
-            input_lines,
-            expected_parsed,
+            input_lines: raw_lines,
+            expected_parsed: Block::Conflict(parsed),
         }
     }
 
     fn make_diff3_conflict_test_block() -> TestBlock {
-        let input_lines = vec![
-            String::from("<<<<<<< yours:some_file.txt"),
-            String::from("  this would be"),
-            String::from("ours here"),
-            String::from("||||||| base:some_file.txt"),
-            String::from("This is base"),
-            String::from("======="),
-            String::from(" and this is"),
-            String::from("theirs"),
-            String::from(">>>>>>> theirs:some_file.txt"),
-        ];
-        let expected_parsed = Some(Block::Conflict(Conflict {
-            ours: ConflictSegment {
-                tag: Some(String::from("yours:some_file.txt")),
-                lines: vec![String::from("  this would be"), String::from("ours here")],
-            },
-            base: Some(ConflictSegment {
-                tag: Some(String::from("base:some_file.txt")),
-                lines: vec![String::from("This is base")],
-            }),
-            theirs: ConflictSegment {
-                tag: Some(String::from("theirs:some_file.txt")),
-                lines: vec![String::from(" and this is"), String::from("theirs")],
-            },
-            resolution: None,
-        }));
+        let test_helpers::TestConflict { raw_lines, parsed } = test_helpers::make_diff3_conflict();
         TestBlock {
-            input_lines,
-            expected_parsed,
+            input_lines: raw_lines,
+            expected_parsed: Block::Conflict(parsed),
         }
     }
 
@@ -387,7 +337,7 @@ mod tests {
         let merge_file = parser.into_merge_file()?;
 
         assert_eq!(merge_file.blocks.len(), 1);
-        assert_eq!(merge_file.blocks[0], expected_parsed.unwrap());
+        assert_eq!(merge_file.blocks[0], expected_parsed);
 
         Ok(())
     }
@@ -407,7 +357,7 @@ mod tests {
         let merge_file = parser.into_merge_file()?;
 
         assert_eq!(merge_file.blocks.len(), 1);
-        assert_eq!(merge_file.blocks[0], expected_parsed.unwrap());
+        assert_eq!(merge_file.blocks[0], expected_parsed);
 
         Ok(())
     }
@@ -427,7 +377,7 @@ mod tests {
         let merge_file = parser.into_merge_file()?;
 
         assert_eq!(merge_file.blocks.len(), 1);
-        assert_eq!(merge_file.blocks[0], expected_parsed.unwrap());
+        assert_eq!(merge_file.blocks[0], expected_parsed);
 
         Ok(())
     }
@@ -475,11 +425,11 @@ mod tests {
 
         let regular_block = make_regular_test_block();
         input_lines.extend(regular_block.input_lines);
-        expected_blocks.extend(regular_block.expected_parsed);
+        expected_blocks.push(regular_block.expected_parsed);
 
         let conflict_block = make_diff2_conflict_test_block();
         input_lines.extend(conflict_block.input_lines);
-        expected_blocks.extend(conflict_block.expected_parsed);
+        expected_blocks.push(conflict_block.expected_parsed);
 
         let mut parser = Parser::new();
         for line in input_lines {
@@ -501,11 +451,11 @@ mod tests {
 
         let conflict_block = make_diff3_conflict_test_block();
         input_lines.extend(conflict_block.input_lines);
-        expected_blocks.extend(conflict_block.expected_parsed);
+        expected_blocks.push(conflict_block.expected_parsed);
 
         let regular_block = make_regular_test_block();
         input_lines.extend(regular_block.input_lines);
-        expected_blocks.extend(regular_block.expected_parsed);
+        expected_blocks.push(regular_block.expected_parsed);
 
         let mut parser = Parser::new();
         for line in input_lines {
@@ -528,11 +478,11 @@ mod tests {
 
         let conflict_block = make_diff2_conflict_test_block();
         input_lines.extend(conflict_block.input_lines);
-        expected_blocks.extend(conflict_block.expected_parsed);
+        expected_blocks.push(conflict_block.expected_parsed);
 
         let conflict_block = make_diff3_conflict_test_block();
         input_lines.extend(conflict_block.input_lines);
-        expected_blocks.extend(conflict_block.expected_parsed);
+        expected_blocks.push(conflict_block.expected_parsed);
 
         let mut parser = Parser::new();
         for line in input_lines {
