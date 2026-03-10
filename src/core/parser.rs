@@ -2,6 +2,7 @@ use crate::core::{
     model::{Block, Conflict, ConflictSegment, MergeFile},
     parser::markers::OURS_BEGIN,
 };
+use std::fmt;
 
 mod markers {
     pub const OURS_BEGIN: &str = "<<<<<<<";
@@ -81,6 +82,25 @@ enum ParseState {
     ParsingTheirs(ConflictBuilder),
 }
 
+#[derive(Debug)]
+pub struct ParserError {
+    pub message: String,
+}
+
+impl ParserError {
+    fn new(message: String) -> ParserError {
+        ParserError { message }
+    }
+}
+
+impl fmt::Display for ParserError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Parser error: {}", self.message)
+    }
+}
+
+impl std::error::Error for ParserError {}
+
 pub struct Parser {
     blocks: Vec<Block>,
     state: ParseState,
@@ -94,7 +114,7 @@ impl Parser {
         }
     }
 
-    pub fn consume(&mut self, line: String) -> Result<(), String> {
+    pub fn consume(&mut self, line: String) -> Result<(), ParserError> {
         self.state = match (
             std::mem::replace(&mut self.state, ParseState::Regular(Vec::new())),
             Marker::from_str(&line),
@@ -112,7 +132,10 @@ impl Parser {
                 ParseState::Regular(lines)
             }
             (ParseState::Regular(_), _) => {
-                return Err(format!("Unexpected marker outside conflict: {}", line));
+                return Err(ParserError::new(format!(
+                    "Unexpected marker outside conflict: {}",
+                    line
+                )));
             }
 
             (ParseState::ParsingOurs(mut cb), Marker::BaseBegin(tag)) => {
@@ -128,7 +151,10 @@ impl Parser {
                 ParseState::ParsingOurs(cb)
             }
             (ParseState::ParsingOurs(_), _) => {
-                return Err(format!("Unexpected marker in ours section: {}", line));
+                return Err(ParserError::new(format!(
+                    "Unexpected marker in ours section: {}",
+                    line
+                )));
             }
 
             (ParseState::ParsingBase(cb), Marker::TheirsBegin) => ParseState::ParsingTheirs(cb),
@@ -137,7 +163,10 @@ impl Parser {
                 ParseState::ParsingBase(cb)
             }
             (ParseState::ParsingBase(_), _) => {
-                return Err(format!("Unexpected marker in base section: {}", line));
+                return Err(ParserError::new(format!(
+                    "Unexpected marker in base section: {}",
+                    line
+                )));
             }
 
             (ParseState::ParsingTheirs(mut cb), Marker::ConflictEnd(tag)) => {
@@ -151,13 +180,16 @@ impl Parser {
                 ParseState::ParsingTheirs(cb)
             }
             (ParseState::ParsingTheirs(_), _) => {
-                return Err(format!("Unexpected marker in theirs section: {}", line));
+                return Err(ParserError::new(format!(
+                    "Unexpected marker in theirs section: {}",
+                    line
+                )));
             }
         };
         Ok(())
     }
 
-    pub fn into_merge_file(self) -> Result<MergeFile, String> {
+    pub fn into_merge_file(self) -> Result<MergeFile, ParserError> {
         let (state, mut blocks) = (self.state, self.blocks);
         match state {
             ParseState::Regular(lines) => {
@@ -166,7 +198,7 @@ impl Parser {
                 }
             }
             _ => {
-                return Err(String::from("Still in conflict block"));
+                return Err(ParserError::new(String::from("Still in conflict block")));
             }
         }
         Ok(MergeFile { blocks })
@@ -260,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn into_merge_file_on_new_parser_returns_file_with_no_blocks() -> Result<(), String> {
+    fn into_merge_file_on_new_parser_returns_file_with_no_blocks() -> Result<(), ParserError> {
         let parser = Parser::new();
         let merge_file = parser.into_merge_file()?;
         assert!(merge_file.blocks.is_empty());
@@ -269,7 +301,7 @@ mod tests {
 
     #[test]
     fn parse_on_input_without_conflicts_creates_file_with_single_regular_block()
-    -> Result<(), String> {
+    -> Result<(), ParserError> {
         let TestBlock {
             input_lines,
             expected_parsed,
@@ -289,7 +321,7 @@ mod tests {
 
     #[test]
     fn parse_on_input_with_single_conflict_creates_file_with_single_conflict_block()
-    -> Result<(), String> {
+    -> Result<(), ParserError> {
         let TestBlock {
             input_lines,
             expected_parsed,
@@ -309,7 +341,7 @@ mod tests {
 
     #[test]
     fn parse_on_input_with_single_diff3_conflict_creates_file_with_single_conflict_block()
-    -> Result<(), String> {
+    -> Result<(), ParserError> {
         let TestBlock {
             input_lines,
             expected_parsed,
@@ -328,7 +360,7 @@ mod tests {
     }
 
     #[test]
-    fn consume_on_invalid_conflict_block_returns_error() -> Result<(), String> {
+    fn consume_on_invalid_conflict_block_returns_error() -> Result<(), ParserError> {
         let input = [
             String::from("<<<<<<< yours:some_file.txt"),
             String::from("  this would be"),
@@ -346,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn into_merge_file_with_unfinished_conflict_block_returns_error() -> Result<(), String> {
+    fn into_merge_file_with_unfinished_conflict_block_returns_error() -> Result<(), ParserError> {
         let input = [
             String::from("<<<<<<< yours:some_file.txt"),
             String::from("  this would be"),
@@ -364,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_lines_with_regular_then_conflict_block_produces_expected() -> Result<(), String> {
+    fn parse_lines_with_regular_then_conflict_block_produces_expected() -> Result<(), ParserError> {
         let mut input_lines = Vec::new();
         let mut expected_blocks = Vec::new();
 
@@ -390,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_lines_with_conflict_then_regular_block_produces_expected() -> Result<(), String> {
+    fn parse_lines_with_conflict_then_regular_block_produces_expected() -> Result<(), ParserError> {
         let mut input_lines = Vec::new();
         let mut expected_blocks = Vec::new();
 
@@ -416,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_lines_with_two_consecutive_conflict_blocks_produces_expected() -> Result<(), String> {
+    fn parse_lines_with_two_consecutive_conflict_blocks_produces_expected() -> Result<(), ParserError> {
         let mut input_lines = Vec::new();
         let mut expected_blocks = Vec::new();
 
@@ -442,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_lines_with_mixed_blocks_produces_expected() -> Result<(), String> {
+    fn parse_lines_with_mixed_blocks_produces_expected() -> Result<(), ParserError> {
         let input_lines = vec![
             String::from("This is a regular block"),
             String::from("<<<<<<< HEAD"),
