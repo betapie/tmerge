@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::core::model::{Conflict, ConflictSegment};
+use crate::core::model::{Block, Conflict, ConflictSegment, MergeFile};
 
 pub fn make_regular_block() -> Vec<String> {
     vec![
@@ -68,4 +68,43 @@ pub fn make_diff3_conflict() -> TestConflict {
         resolution: None,
     };
     TestConflict { raw_lines, parsed }
+}
+
+pub struct TestMergeFile {
+    pub raw_lines: Vec<String>,
+    pub parsed: MergeFile,
+}
+
+pub fn make_mixed_test_merge_file() -> TestMergeFile {
+    let mut raw_lines = Vec::new();
+    let mut parsed_blocks = Vec::new();
+
+    {
+        let TestConflict {
+            raw_lines: conflict_raw_lines,
+            parsed: parsed_conflict,
+        } = make_diff2_conflict();
+        raw_lines.extend(conflict_raw_lines);
+        parsed_blocks.push(Block::Conflict(parsed_conflict));
+    }
+    {
+        let regular_block_lines = make_regular_block();
+        raw_lines.extend(regular_block_lines.clone());
+        parsed_blocks.push(Block::Regular(regular_block_lines));
+    }
+    {
+        let TestConflict {
+            raw_lines: conflict_raw_lines,
+            parsed: parsed_conflict,
+        } = make_diff3_conflict();
+        raw_lines.extend(conflict_raw_lines);
+        parsed_blocks.push(Block::Conflict(parsed_conflict));
+    }
+
+    TestMergeFile {
+        raw_lines,
+        parsed: MergeFile {
+            blocks: parsed_blocks,
+        },
+    }
 }
