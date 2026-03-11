@@ -266,8 +266,9 @@ mod tests {
         let mut expected_unparsed = Vec::new();
 
         if let Block::Conflict(conflict) = &mut merge_file.blocks[0] {
-            conflict.resolution = Some(Resolution::Ours);
-            expected_unparsed.extend(conflict.ours.lines.clone());
+            let edited_lines = vec![String::from("this was"), String::from("edited")];
+            conflict.resolution = Some(Resolution::Edited(edited_lines.clone()));
+            expected_unparsed.extend(edited_lines);
         } else {
             panic!("Expected first block to be conflict block");
         }
