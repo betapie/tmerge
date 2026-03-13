@@ -70,35 +70,65 @@ pub fn make_diff3_conflict() -> TestConflict {
     TestConflict { raw_lines, parsed }
 }
 
+pub enum BlockType {
+    Regular,
+    Diff2,
+    Diff3,
+}
+
+pub struct TestBlock {
+    pub raw_lines: Vec<String>,
+    pub block: Block,
+}
+
+pub fn make_test_block(block_type: BlockType) -> TestBlock {
+    match block_type {
+        BlockType::Regular => {
+            let lines = make_regular_block();
+            TestBlock {
+                raw_lines: lines.clone(),
+                block: Block::Regular(lines),
+            }
+        }
+        BlockType::Diff2 => {
+            let TestConflict {
+                raw_lines,
+                parsed: conflict,
+            } = make_diff2_conflict();
+            TestBlock {
+                raw_lines,
+                block: Block::Conflict(conflict),
+            }
+        }
+        BlockType::Diff3 => {
+            let TestConflict {
+                raw_lines,
+                parsed: conflict,
+            } = make_diff3_conflict();
+            TestBlock {
+                raw_lines,
+                block: Block::Conflict(conflict),
+            }
+        }
+    }
+}
+
 pub struct TestMergeFile {
     pub raw_lines: Vec<String>,
     pub parsed: MergeFile,
 }
 
-pub fn make_mixed_test_merge_file() -> TestMergeFile {
+pub fn make_test_merge_file(block_types: Vec<BlockType>) -> TestMergeFile {
     let mut raw_lines = Vec::new();
     let mut parsed_blocks = Vec::new();
 
-    {
-        let TestConflict {
-            raw_lines: conflict_raw_lines,
-            parsed: parsed_conflict,
-        } = make_diff2_conflict();
-        raw_lines.extend(conflict_raw_lines);
-        parsed_blocks.push(Block::Conflict(parsed_conflict));
-    }
-    {
-        let regular_block_lines = make_regular_block();
-        raw_lines.extend(regular_block_lines.clone());
-        parsed_blocks.push(Block::Regular(regular_block_lines));
-    }
-    {
-        let TestConflict {
-            raw_lines: conflict_raw_lines,
-            parsed: parsed_conflict,
-        } = make_diff3_conflict();
-        raw_lines.extend(conflict_raw_lines);
-        parsed_blocks.push(Block::Conflict(parsed_conflict));
+    for block_type in block_types {
+        let TestBlock {
+            raw_lines: block_raw_lines,
+            block,
+        } = make_test_block(block_type);
+        raw_lines.extend(block_raw_lines);
+        parsed_blocks.push(block);
     }
 
     TestMergeFile {

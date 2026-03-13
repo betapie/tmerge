@@ -197,8 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn render_merge_file_with_single_regular_block_produces_expected() -> Result<(), RenderError>
-    {
+    fn render_merge_file_with_single_regular_block_produces_expected() -> Result<(), RenderError> {
         let regular_block_lines = test_helpers::make_regular_block();
         let merge_file = MergeFile {
             blocks: vec![Block::Regular(regular_block_lines.clone())],
@@ -209,12 +208,16 @@ mod tests {
     }
 
     #[test]
-    fn render_merge_file_with_mixed_unresolved_blocks_produces_expected()
-    -> Result<(), RenderError> {
+    fn render_merge_file_with_mixed_unresolved_blocks_produces_expected() -> Result<(), RenderError>
+    {
         let test_helpers::TestMergeFile {
             raw_lines: expected_renderd,
             parsed: merge_file,
-        } = test_helpers::make_mixed_test_merge_file();
+        } = test_helpers::make_test_merge_file(vec![
+            test_helpers::BlockType::Diff2,
+            test_helpers::BlockType::Regular,
+            test_helpers::BlockType::Diff3,
+        ]);
         let renderd = render_merge_file(&merge_file)?;
         assert_eq!(renderd, expected_renderd);
         Ok(())
@@ -226,7 +229,11 @@ mod tests {
         let test_helpers::TestMergeFile {
             raw_lines: _,
             parsed: mut merge_file,
-        } = test_helpers::make_mixed_test_merge_file();
+        } = test_helpers::make_test_merge_file(vec![
+            test_helpers::BlockType::Diff2,
+            test_helpers::BlockType::Regular,
+            test_helpers::BlockType::Diff3,
+        ]);
 
         let mut expected_renderd = Vec::new();
 
@@ -261,7 +268,11 @@ mod tests {
         let test_helpers::TestMergeFile {
             raw_lines: _,
             parsed: mut merge_file,
-        } = test_helpers::make_mixed_test_merge_file();
+        } = test_helpers::make_test_merge_file(vec![
+            test_helpers::BlockType::Diff2,
+            test_helpers::BlockType::Regular,
+            test_helpers::BlockType::Diff3,
+        ]);
 
         let mut expected_renderd = Vec::new();
 
@@ -301,7 +312,11 @@ mod tests {
         let test_helpers::TestMergeFile {
             raw_lines: _,
             parsed: mut merge_file,
-        } = test_helpers::make_mixed_test_merge_file();
+        } = test_helpers::make_test_merge_file(vec![
+            test_helpers::BlockType::Diff2,
+            test_helpers::BlockType::Regular,
+            test_helpers::BlockType::Diff3,
+        ]);
 
         if let Block::Conflict(conflict) = &mut merge_file.blocks[0] {
             assert!(conflict.base.is_none());
