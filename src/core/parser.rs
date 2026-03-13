@@ -496,7 +496,11 @@ mod tests {
         let test_helpers::TestMergeFile {
             raw_lines: input_lines,
             parsed: expected_parsed,
-        } = test_helpers::make_mixed_test_merge_file();
+        } = test_helpers::make_test_merge_file(vec![
+            test_helpers::BlockType::Diff2,
+            test_helpers::BlockType::Regular,
+            test_helpers::BlockType::Diff3,
+        ]);
 
         let mut parser = Parser::new();
         for line in input_lines {
