@@ -1,4 +1,5 @@
 mod core;
+mod app;
 
 use core::parser::Parser;
 use std::io::BufRead;

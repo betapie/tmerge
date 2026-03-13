@@ -19,7 +19,8 @@ pub fn make_diff2_conflict() -> TestConflict {
     let raw_lines = vec![
         String::from("<<<<<<< yours:some_file.txt"),
         String::from("  this would be"),
-        String::from("ours here"),
+        String::from("ours "),
+        String::from("here"),
         String::from("======="),
         String::from(" and this is"),
         String::from("theirs"),
@@ -28,7 +29,11 @@ pub fn make_diff2_conflict() -> TestConflict {
     let parsed = Conflict {
         ours: ConflictSegment {
             tag: Some(String::from("yours:some_file.txt")),
-            lines: vec![String::from("  this would be"), String::from("ours here")],
+            lines: vec![
+                String::from("  this would be"),
+                String::from("ours "),
+                String::from("here"),
+            ],
         },
         base: None,
         theirs: ConflictSegment {
@@ -44,7 +49,8 @@ pub fn make_diff3_conflict() -> TestConflict {
     let raw_lines = vec![
         String::from("<<<<<<< yours:some_file.txt"),
         String::from("  this would be"),
-        String::from("ours here"),
+        String::from("ours "),
+        String::from("here"),
         String::from("||||||| base:some_file.txt"),
         String::from("This is base"),
         String::from("======="),
@@ -55,7 +61,11 @@ pub fn make_diff3_conflict() -> TestConflict {
     let parsed = Conflict {
         ours: ConflictSegment {
             tag: Some(String::from("yours:some_file.txt")),
-            lines: vec![String::from("  this would be"), String::from("ours here")],
+            lines: vec![
+                String::from("  this would be"),
+                String::from("ours "),
+                String::from("here"),
+            ],
         },
         base: Some(ConflictSegment {
             tag: Some(String::from("base:some_file.txt")),
