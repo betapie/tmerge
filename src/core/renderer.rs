@@ -4,25 +4,25 @@ use crate::core::constants::markers;
 use crate::core::model::{Block, Conflict, MergeFile, Resolution};
 
 #[derive(Debug)]
-pub struct UnparseError {
+pub struct RenderError {
     pub message: String,
 }
 
-impl UnparseError {
-    fn new(message: String) -> UnparseError {
-        UnparseError { message }
+impl RenderError {
+    fn new(message: String) -> RenderError {
+        RenderError { message }
     }
 }
 
-impl fmt::Display for UnparseError {
+impl fmt::Display for RenderError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unparse error: {}", self.message)
+        write!(f, "Render error: {}", self.message)
     }
 }
 
-impl std::error::Error for UnparseError {}
+impl std::error::Error for RenderError {}
 
-pub fn unparse_merge_file(merge_file: &MergeFile) -> Result<Vec<String>, UnparseError> {
+pub fn render_merge_file(merge_file: &MergeFile) -> Result<Vec<String>, RenderError> {
     let mut result = Vec::new();
     for block in &merge_file.blocks {
         match block {
@@ -30,14 +30,14 @@ pub fn unparse_merge_file(merge_file: &MergeFile) -> Result<Vec<String>, Unparse
                 result.extend_from_slice(lines);
             }
             Block::Conflict(conflict) => {
-                result.extend(unparse_conflict(conflict)?);
+                result.extend(render_conflict(conflict)?);
             }
         }
     }
     Ok(result)
 }
 
-pub fn unparse_conflict(conflict: &Conflict) -> Result<Vec<String>, UnparseError> {
+pub fn render_conflict(conflict: &Conflict) -> Result<Vec<String>, RenderError> {
     let result_lines = match &conflict.resolution {
         Some(resolution) => match resolution {
             Resolution::Ours => conflict.ours.lines.clone(),
@@ -46,7 +46,7 @@ pub fn unparse_conflict(conflict: &Conflict) -> Result<Vec<String>, UnparseError
                 if let Some(base) = &conflict.base {
                     base.lines.clone()
                 } else {
-                    return Err(UnparseError::new(String::from(
+                    return Err(RenderError::new(String::from(
                         "conflict has no base state. Cannot resolve with base",
                     )));
                 }
@@ -89,192 +89,192 @@ mod tests {
     use crate::core::test_helpers::{self};
 
     #[test]
-    fn unparse_conflict_on_unresolved_diff2_block_returns_raw() -> Result<(), UnparseError> {
+    fn render_conflict_on_unresolved_diff2_block_returns_raw() -> Result<(), RenderError> {
         let test_helpers::TestConflict {
             raw_lines,
             parsed: conflict,
         } = test_helpers::make_diff2_conflict();
         assert!(conflict.resolution.is_none());
-        let unparsed = unparse_conflict(&conflict)?;
-        assert_eq!(unparsed, raw_lines);
+        let renderd = render_conflict(&conflict)?;
+        assert_eq!(renderd, raw_lines);
         Ok(())
     }
 
     #[test]
-    fn unparse_on_diff2_block_when_resolved_with_ours_returns_ours() -> Result<(), UnparseError> {
+    fn render_on_diff2_block_when_resolved_with_ours_returns_ours() -> Result<(), RenderError> {
         let test_helpers::TestConflict {
             raw_lines: _,
             parsed: mut conflict,
         } = test_helpers::make_diff2_conflict();
         conflict.resolution = Some(Resolution::Ours);
-        let unparsed = unparse_conflict(&conflict)?;
-        assert_eq!(unparsed, conflict.ours.lines);
+        let renderd = render_conflict(&conflict)?;
+        assert_eq!(renderd, conflict.ours.lines);
         Ok(())
     }
 
     #[test]
-    fn unparse_conflict_on_diff2_block_when_resolved_with_base_returns_error() {
+    fn render_conflict_on_diff2_block_when_resolved_with_base_returns_error() {
         let test_helpers::TestConflict {
             raw_lines: _,
             parsed: mut conflict,
         } = test_helpers::make_diff2_conflict();
         conflict.resolution = Some(Resolution::Base);
-        let unparsed = unparse_conflict(&conflict);
-        assert!(unparsed.is_err());
+        let renderd = render_conflict(&conflict);
+        assert!(renderd.is_err());
     }
 
     #[test]
-    fn unparse_conflict_on_diff2_block_when_resolved_with_theirs_returs_theirs()
-    -> Result<(), UnparseError> {
+    fn render_conflict_on_diff2_block_when_resolved_with_theirs_returs_theirs()
+    -> Result<(), RenderError> {
         let test_helpers::TestConflict {
             raw_lines: _,
             parsed: mut conflict,
         } = test_helpers::make_diff2_conflict();
         conflict.resolution = Some(Resolution::Theirs);
-        let unparsed = unparse_conflict(&conflict)?;
-        assert_eq!(unparsed, conflict.theirs.lines);
+        let renderd = render_conflict(&conflict)?;
+        assert_eq!(renderd, conflict.theirs.lines);
         Ok(())
     }
 
     #[test]
-    fn unparse_on_unresolved_diff3_block_returns_raw() -> Result<(), UnparseError> {
+    fn render_on_unresolved_diff3_block_returns_raw() -> Result<(), RenderError> {
         let test_helpers::TestConflict {
             raw_lines,
             parsed: conflict,
         } = test_helpers::make_diff3_conflict();
         assert!(conflict.resolution.is_none());
-        let unparsed = unparse_conflict(&conflict)?;
-        assert_eq!(unparsed, raw_lines);
+        let renderd = render_conflict(&conflict)?;
+        assert_eq!(renderd, raw_lines);
         Ok(())
     }
 
     #[test]
-    fn unparse_conflict_on_diff3_block_when_resolved_with_ours_returns_ours()
-    -> Result<(), UnparseError> {
+    fn render_conflict_on_diff3_block_when_resolved_with_ours_returns_ours()
+    -> Result<(), RenderError> {
         let test_helpers::TestConflict {
             raw_lines: _,
             parsed: mut conflict,
         } = test_helpers::make_diff3_conflict();
         conflict.resolution = Some(Resolution::Ours);
-        let unparsed = unparse_conflict(&conflict)?;
-        assert_eq!(unparsed, conflict.ours.lines);
+        let renderd = render_conflict(&conflict)?;
+        assert_eq!(renderd, conflict.ours.lines);
         Ok(())
     }
 
     #[test]
-    fn unparse_conflict_on_diff3_block_when_resolved_with_base_returns_base()
-    -> Result<(), UnparseError> {
+    fn render_conflict_on_diff3_block_when_resolved_with_base_returns_base()
+    -> Result<(), RenderError> {
         let test_helpers::TestConflict {
             raw_lines: _,
             parsed: mut conflict,
         } = test_helpers::make_diff3_conflict();
         assert!(conflict.base.is_some());
         conflict.resolution = Some(Resolution::Base);
-        let unparsed = unparse_conflict(&conflict)?;
-        assert_eq!(unparsed, conflict.base.unwrap().lines);
+        let renderd = render_conflict(&conflict)?;
+        assert_eq!(renderd, conflict.base.unwrap().lines);
         Ok(())
     }
 
     #[test]
-    fn unparse_conflict_on_diff3_block_when_resolved_with_theirs_returs_theirs()
-    -> Result<(), UnparseError> {
+    fn render_conflict_on_diff3_block_when_resolved_with_theirs_returs_theirs()
+    -> Result<(), RenderError> {
         let test_helpers::TestConflict {
             raw_lines: _,
             parsed: mut conflict,
         } = test_helpers::make_diff3_conflict();
         conflict.resolution = Some(Resolution::Theirs);
-        let unparsed = unparse_conflict(&conflict)?;
-        assert_eq!(unparsed, conflict.theirs.lines);
+        let renderd = render_conflict(&conflict)?;
+        assert_eq!(renderd, conflict.theirs.lines);
         Ok(())
     }
 
     #[test]
-    fn unparse_merge_file_with_no_blocks_returns_empty() -> Result<(), UnparseError> {
+    fn render_merge_file_with_no_blocks_returns_empty() -> Result<(), RenderError> {
         let merge_file = MergeFile { blocks: Vec::new() };
-        let unparsed = unparse_merge_file(&merge_file)?;
-        assert!(unparsed.is_empty());
+        let renderd = render_merge_file(&merge_file)?;
+        assert!(renderd.is_empty());
         Ok(())
     }
 
     #[test]
-    fn unparse_merge_file_with_single_regular_block_produces_expected() -> Result<(), UnparseError>
+    fn render_merge_file_with_single_regular_block_produces_expected() -> Result<(), RenderError>
     {
         let regular_block_lines = test_helpers::make_regular_block();
         let merge_file = MergeFile {
             blocks: vec![Block::Regular(regular_block_lines.clone())],
         };
-        let unparsed = unparse_merge_file(&merge_file)?;
-        assert_eq!(unparsed, regular_block_lines);
+        let renderd = render_merge_file(&merge_file)?;
+        assert_eq!(renderd, regular_block_lines);
         Ok(())
     }
 
     #[test]
-    fn unparse_merge_file_with_mixed_unresolved_blocks_produces_expected()
-    -> Result<(), UnparseError> {
+    fn render_merge_file_with_mixed_unresolved_blocks_produces_expected()
+    -> Result<(), RenderError> {
         let test_helpers::TestMergeFile {
-            raw_lines: expected_unparsed,
+            raw_lines: expected_renderd,
             parsed: merge_file,
         } = test_helpers::make_mixed_test_merge_file();
-        let unparsed = unparse_merge_file(&merge_file)?;
-        assert_eq!(unparsed, expected_unparsed);
+        let renderd = render_merge_file(&merge_file)?;
+        assert_eq!(renderd, expected_renderd);
         Ok(())
     }
 
     #[test]
-    fn unparse_merge_file_with_mixed_resolved_and_unresolved_blocks_produces_expected()
-    -> Result<(), UnparseError> {
+    fn render_merge_file_with_mixed_resolved_and_unresolved_blocks_produces_expected()
+    -> Result<(), RenderError> {
         let test_helpers::TestMergeFile {
             raw_lines: _,
             parsed: mut merge_file,
         } = test_helpers::make_mixed_test_merge_file();
 
-        let mut expected_unparsed = Vec::new();
+        let mut expected_renderd = Vec::new();
 
         if let Block::Conflict(conflict) = &mut merge_file.blocks[0] {
             conflict.resolution = Some(Resolution::Ours);
-            expected_unparsed.extend(conflict.ours.lines.clone());
+            expected_renderd.extend(conflict.ours.lines.clone());
         } else {
             panic!("Expected first block to be conflict block");
         }
 
         if let Block::Regular(lines) = &merge_file.blocks[1] {
-            expected_unparsed.extend(lines.clone());
+            expected_renderd.extend(lines.clone());
         } else {
             panic!("Expected second block to be regular block");
         }
 
         if let Block::Conflict(conflict) = &merge_file.blocks[2] {
-            expected_unparsed.extend(unparse_conflict(conflict)?);
+            expected_renderd.extend(render_conflict(conflict)?);
         } else {
             panic!("Expected third block to be conflict block");
         }
 
-        let unparsed = unparse_merge_file(&merge_file)?;
-        assert_eq!(unparsed, expected_unparsed);
+        let renderd = render_merge_file(&merge_file)?;
+        assert_eq!(renderd, expected_renderd);
 
         Ok(())
     }
 
     #[test]
-    fn unparse_merge_file_with_all_resolved_and_unresolved_blocks_produces_expected()
-    -> Result<(), UnparseError> {
+    fn render_merge_file_with_all_resolved_and_unresolved_blocks_produces_expected()
+    -> Result<(), RenderError> {
         let test_helpers::TestMergeFile {
             raw_lines: _,
             parsed: mut merge_file,
         } = test_helpers::make_mixed_test_merge_file();
 
-        let mut expected_unparsed = Vec::new();
+        let mut expected_renderd = Vec::new();
 
         if let Block::Conflict(conflict) = &mut merge_file.blocks[0] {
             let edited_lines = vec![String::from("this was"), String::from("edited")];
             conflict.resolution = Some(Resolution::Edited(edited_lines.clone()));
-            expected_unparsed.extend(edited_lines);
+            expected_renderd.extend(edited_lines);
         } else {
             panic!("Expected first block to be conflict block");
         }
 
         if let Block::Regular(lines) = &merge_file.blocks[1] {
-            expected_unparsed.extend(lines.clone());
+            expected_renderd.extend(lines.clone());
         } else {
             panic!("Expected second block to be regular block");
         }
@@ -282,7 +282,7 @@ mod tests {
         if let Block::Conflict(conflict) = &mut merge_file.blocks[2] {
             conflict.resolution = Some(Resolution::Base);
             if let Some(base) = &conflict.base {
-                expected_unparsed.extend(base.lines.clone());
+                expected_renderd.extend(base.lines.clone());
             } else {
                 panic!("Expected third block to be diff3 block");
             }
@@ -290,14 +290,14 @@ mod tests {
             panic!("Expected third block to be conflict block");
         }
 
-        let unparsed = unparse_merge_file(&merge_file)?;
-        assert_eq!(unparsed, expected_unparsed);
+        let renderd = render_merge_file(&merge_file)?;
+        assert_eq!(renderd, expected_renderd);
 
         Ok(())
     }
 
     #[test]
-    fn unparse_merge_file_with_invalid_resolution_for_diff2_block_returns_error() {
+    fn render_merge_file_with_invalid_resolution_for_diff2_block_returns_error() {
         let test_helpers::TestMergeFile {
             raw_lines: _,
             parsed: mut merge_file,
@@ -310,7 +310,7 @@ mod tests {
             panic!("Expected first block to be conflict block");
         }
 
-        let unparsed = unparse_merge_file(&merge_file);
-        assert!(unparsed.is_err());
+        let renderd = render_merge_file(&merge_file);
+        assert!(renderd.is_err());
     }
 }
