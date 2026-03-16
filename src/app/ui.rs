@@ -25,6 +25,7 @@ mod merge_file_view {
     };
 
     const COLOR_OURS: Color = Color::Blue;
+    const COLOR_BASE: Color = Color::Gray;
     const COLOR_THEIRS: Color = Color::Yellow;
     const COLOR_RESOLVED: Color = Color::Green;
     const COLOR_UNRESOLVED: Color = Color::Red;
@@ -81,6 +82,7 @@ mod merge_file_view {
 
     enum ConflictSide {
         Ours,
+        Base,
         Theirs,
     }
 
@@ -91,11 +93,35 @@ mod merge_file_view {
                     Layout::vertical([Constraint::Percentage(35), Constraint::Percentage(65)])
                         .areas(area);
 
-                let [left, right] =
-                    Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                let (left, middle, right) = {
+                    if conflict.base.is_some() {
+                        let [left, middle, right] = Layout::horizontal([
+                            Constraint::Percentage(33),
+                            Constraint::Percentage(34),
+                            Constraint::Percentage(33),
+                        ])
                         .areas(top);
+                        (left, Some(middle), right)
+                    } else {
+                        let [left, right] = Layout::horizontal([
+                            Constraint::Percentage(50),
+                            Constraint::Percentage(50),
+                        ])
+                        .areas(top);
+                        (left, None, right)
+                    }
+                };
 
                 render_conflict_side(merge_file_view, ConflictSide::Ours, conflict, frame, left);
+                if conflict.base.is_some() {
+                    render_conflict_side(
+                        merge_file_view,
+                        ConflictSide::Base,
+                        conflict,
+                        frame,
+                        middle.unwrap(),
+                    );
+                }
                 render_conflict_side(
                     merge_file_view,
                     ConflictSide::Theirs,
@@ -103,7 +129,6 @@ mod merge_file_view {
                     frame,
                     right,
                 );
-                //render_theirs(merge_file_view, conflict, frame, right);
                 render_merged(merge_file_view, frame, bottom);
             }
             None => render_merged(merge_file_view, frame, area),
@@ -128,6 +153,14 @@ mod merge_file_view {
                     None => COLOR_OURS,
                 };
                 (title, color, &conflict.ours)
+            }
+            ConflictSide::Base => {
+                let title = "BASE";
+                let color = match &conflict.resolution {
+                    Some(_) => COLOR_CURRENT_BG,
+                    None => COLOR_BASE,
+                };
+                (title, color, conflict.base.as_ref().unwrap())
             }
             ConflictSide::Theirs => {
                 let title = "THEIRS";
