@@ -1,32 +1,62 @@
-mod core;
 mod app;
+mod core;
 
-use core::parser::Parser;
-use std::io::BufRead;
+use std::{
+    env,
+    io::{self, BufRead, BufReader, stdout},
+    path::PathBuf,
+};
 
-fn main() {
-    let args = std::env::args().collect::<Vec<_>>();
-    let filename = &args[1];
-    let f = std::fs::File::open(filename).unwrap();
-    let reader = std::io::BufReader::new(f);
-    let mut parser = Parser::new();
-    for line in reader.lines() {
-        parser = parser.consume(line.unwrap()).unwrap();
+use crossterm::{
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
+use ratatui::{Terminal, backend::CrosstermBackend};
+
+use app::app::App;
+
+fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: mergetool <file>");
+        std::process::exit(1);
     }
-    let merge_file = parser.into_merge_file().unwrap();
-    let mut num_conflict_blocks = 0;
-    for block in &merge_file.blocks {
-        match block {
-            core::model::Block::Regular(_) => {}
-            core::model::Block::Conflict(_) => num_conflict_blocks += 1,
+
+    let path = PathBuf::from(&args[1]);
+    let file = std::fs::File::open(&path)?;
+    let reader = BufReader::new(file);
+    let mut parser = core::parser::Parser::new();
+    for line in reader.lines() {
+        let line = line?;
+        parser = parser.consume(line)?;
+    }
+    let merge_file = parser.into_merge_file()?;
+
+    let mut app = App::new(merge_file, path.clone())?;
+
+    enable_raw_mode()?;
+    let mut stdout = stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let result = run(&mut terminal, &mut app);
+
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+
+    result
+}
+
+fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> anyhow::Result<()> {
+    loop {
+        terminal.draw(|frame| app::ui::render(app, frame))?;
+        app::event::handle_events(app)?;
+
+        if app.should_quit {
+            break;
         }
     }
-    if num_conflict_blocks == 0 {
-        println!("No conflicts found in file {}", filename);
-    } else {
-        println!(
-            "Found {} conflicts in file {}",
-            num_conflict_blocks, filename
-        );
-    }
+    Ok(())
 }
