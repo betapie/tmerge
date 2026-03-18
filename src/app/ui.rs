@@ -1,10 +1,52 @@
-use ratatui::Frame;
+use ratatui::{
+    Frame,
+    layout::{Constraint, Layout, Rect},
+    style::{Color, Style},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
+};
 
 use crate::app::app::App;
 
 pub fn render(app: &App, frame: &mut Frame) {
     let view = &app.view;
     merge_file_view::render(view, frame);
+
+    if let Some(error) = &app.current_error {
+        render_error(error, frame);
+    }
+}
+
+fn render_error(error_message: &str, frame: &mut Frame) {
+    let area = frame.area();
+    let error_modal_area = centered_rect(50, 50, area);
+    frame.render_widget(Clear, error_modal_area);
+
+    let block = Block::default()
+        .title("Something went wrong")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Double)
+        .border_style(Style::default().fg(Color::Red));
+
+    let text = format!("{}\n\nPress Enter or Esc to dismiss", error_message);
+    let para = Paragraph::new(text).block(block).wrap(Wrap { trim: false });
+
+    frame.render_widget(para, error_modal_area);
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let vertical = Layout::vertical([
+        Constraint::Percentage((100 - percent_y) / 2),
+        Constraint::Percentage(percent_y),
+        Constraint::Percentage((100 - percent_y) / 2),
+    ])
+    .split(area);
+
+    Layout::horizontal([
+        Constraint::Percentage((100 - percent_x) / 2),
+        Constraint::Percentage(percent_x),
+        Constraint::Percentage((100 - percent_x) / 2),
+    ])
+    .split(vertical[1])[1]
 }
 
 mod merge_file_view {
@@ -51,8 +93,7 @@ mod merge_file_view {
     }
 
     fn render_statusbar(merge_file_view: &MergeFileView, frame: &mut Frame, area: Rect) {
-        let is_dirty = true; // todo move into merge file view
-        let dirty = if is_dirty { "[*] " } else { "    " };
+        let dirty = if merge_file_view.is_dirty { "[*] " } else { "    " };
 
         let conflict_info = match merge_file_view.current_conflict_idx() {
             Some(n) => format!(
@@ -346,6 +387,8 @@ mod merge_file_view {
             desc(" theirs  "),
             key("  c  "),
             desc(" clear  "),
+            key("  w  "),
+            desc(" write  "),
             key("  q  "),
             desc(" quit  "),
         ]);

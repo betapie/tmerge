@@ -1,8 +1,12 @@
-use std::fmt;
+use std::{
+    fmt,
+    fs::File,
+    io::{BufWriter, Write},
+};
 
 use crate::core::{
     model::{Block, Conflict, MergeFile, Resolution},
-    renderer::render_conflict,
+    renderer::{RenderError, render_conflict, render_merge_file},
 };
 
 fn collect_conflict_block_indices(merge_file: &MergeFile) -> Vec<usize> {
@@ -73,6 +77,16 @@ pub struct MergeFileView {
 
     pub conflict_block_indices: Vec<usize>,
     pub unresolved_conflict_block_indices: Vec<usize>,
+
+    pub is_dirty: bool
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum WriteError {
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("render error: {0}")]
+    Parse(#[from] RenderError),
 }
 
 impl MergeFileView {
@@ -101,8 +115,21 @@ impl MergeFileView {
                 global_block_lengths,
                 conflict_block_indices,
                 unresolved_conflict_block_indices,
+                is_dirty: false,
             })
         }
+    }
+
+    pub fn write(&mut self) -> Result<(), WriteError> {
+        let lines = render_merge_file(&self.merge_file)?;
+        let file = File::create(&self.file_path)?;
+        let mut writer = BufWriter::new(file);
+        for line in lines {
+            writeln!(writer, "{}", line)?;
+        }
+        writer.flush()?;
+        self.is_dirty = false;
+        Ok(())
     }
 
     pub fn num_conflicts(&self) -> usize {
@@ -229,6 +256,7 @@ impl MergeFileView {
             self.merge_file.blocks.get_mut(self.current_block_idx)
         {
             conflict.resolution = Some(resolution);
+            self.is_dirty = true;
             self.invalidate();
         }
     }
@@ -238,6 +266,7 @@ impl MergeFileView {
             self.merge_file.blocks.get_mut(self.current_block_idx)
         {
             conflict.resolution = None;
+            self.is_dirty = true;
             self.invalidate();
         }
     }
@@ -258,7 +287,7 @@ impl MergeFileView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{app::merge_file_view, core::test_helpers};
+    use crate::core::test_helpers;
 
     #[test]
     fn new_merge_file_view_from_empty_merge_file_returns_err() {
