@@ -24,16 +24,27 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         }
         _ => {}
     }
+    if app.current_error.is_some() {
+        match key.code {
+            KeyCode::Enter | KeyCode::Esc => {
+                app.current_error = None;
+            }
+            _ => {}
+        }
+        return;
+    }
 
     let view = &mut app.view;
-    merge_file_view::handle_key(view, key);
+    if let Err(error) = merge_file_view::handle_key(view, key) {
+        app.current_error = Some(error);
+    }
 }
 
 mod merge_file_view {
     use crate::{app::merge_file_view::MergeFileView, core::model::Resolution};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-    pub fn handle_key(merge_file_view: &mut MergeFileView, key: KeyEvent) {
+    pub fn handle_key(merge_file_view: &mut MergeFileView, key: KeyEvent) -> Result<(), String> {
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => merge_file_view.scroll_down(1),
             KeyCode::Char('k') | KeyCode::Up => merge_file_view.scroll_up(1),
@@ -60,7 +71,14 @@ mod merge_file_view {
                 merge_file_view.resolve_current(Resolution::Theirs);
             }
             KeyCode::Char('c') => merge_file_view.unresolve_current(),
+            KeyCode::Char('w') => match merge_file_view.write() {
+                Ok(_) => {}
+                Err(error) => {
+                    return Err(error.to_string());
+                }
+            },
             _ => {}
         }
+        Ok(())
     }
 }
