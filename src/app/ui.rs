@@ -384,6 +384,8 @@ mod merge_file_view {
             desc(" ours  "),
             key("  t  "),
             desc(" theirs  "),
+            key("  e  "),
+            desc(" edit  "),
             key("  c  "),
             desc(" clear  "),
             key("  w  "),
