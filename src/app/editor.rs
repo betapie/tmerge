@@ -2,7 +2,7 @@ use std::io::{BufWriter, Write};
 
 use crossterm::{
     execute,
-    terminal::{LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use tempfile::NamedTempFile;
 
@@ -32,7 +32,7 @@ pub fn edit(lines: &[String]) -> Result<Vec<String>, EditorError> {
         .status()?;
 
     enable_raw_mode()?;
-    execute!(std::io::stdout(), LeaveAlternateScreen)?;
+    execute!(std::io::stdout(), EnterAlternateScreen)?;
 
     if !status.success() {
         return Err(EditorError::ExternalEditorError(format!(
