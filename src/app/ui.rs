@@ -301,8 +301,7 @@ mod merge_file_view {
                     } else {
                         Color::Reset
                     };
-                    // TODO handle this being Err
-                    let conflict_lines = render_conflict(c).unwrap();
+                    let conflict_lines = render_conflict(c);
                     let fg_color = match c.resolution {
                         Some(_) => COLOR_RESOLVED,
                         None => COLOR_UNRESOLVED,

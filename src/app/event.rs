@@ -79,7 +79,7 @@ mod merge_file_view {
             }
             KeyCode::Char('e') => {
                 if let Some(conflict) = merge_file_view.current_conflict() {
-                    let conflict_lines = render_conflict(conflict).unwrap();
+                    let conflict_lines = render_conflict(conflict);
                     let edit_result = editor::edit(&conflict_lines);
                     *force_redraw = true;
                     match edit_result {
