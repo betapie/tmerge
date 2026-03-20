@@ -54,6 +54,11 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
         terminal.draw(|frame| app::ui::render(app, frame))?;
         app::event::handle_events(app)?;
 
+        if app.force_redraw {
+            app.force_redraw = false;
+            terminal.clear()?;
+        }
+
         if app.should_quit {
             break;
         }

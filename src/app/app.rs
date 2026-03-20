@@ -4,6 +4,7 @@ use crate::core::model::MergeFile;
 pub struct App {
     pub view: MergeFileView,
     pub should_quit: bool,
+    pub force_redraw: bool,
     pub current_error: Option<String>,
 }
 
@@ -16,6 +17,7 @@ impl App {
         Ok(Self {
             view: merge_file_view,
             should_quit: false,
+            force_redraw: false,
             current_error: None,
         })
     }

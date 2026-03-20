@@ -1,4 +1,5 @@
-pub mod merge_file_view;
 pub mod app;
-pub mod ui;
+pub mod editor;
 pub mod event;
+pub mod merge_file_view;
+pub mod ui;
