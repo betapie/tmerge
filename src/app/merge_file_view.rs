@@ -6,7 +6,7 @@ use std::{
 
 use crate::core::{
     model::{Block, Conflict, MergeFile, Resolution},
-    renderer::{RenderError, render_conflict, render_merge_file},
+    renderer::{render_conflict, render_merge_file},
 };
 
 fn collect_conflict_block_indices(merge_file: &MergeFile) -> Vec<usize> {
@@ -38,7 +38,7 @@ fn calculate_global_block_lengths(merge_file: &MergeFile) -> Vec<usize> {
             Block::Conflict(conflict) => {
                 let ours_len = conflict.ours.lines.len();
                 let theirs_len = conflict.theirs.lines.len();
-                let merged_len = render_conflict(conflict).map_or(0, |lines| lines.len());
+                let merged_len = render_conflict(conflict).len();
                 [ours_len, theirs_len, merged_len]
                     .into_iter()
                     .max()
@@ -78,15 +78,13 @@ pub struct MergeFileView {
     pub conflict_block_indices: Vec<usize>,
     pub unresolved_conflict_block_indices: Vec<usize>,
 
-    pub is_dirty: bool
+    pub is_dirty: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("render error: {0}")]
-    Parse(#[from] RenderError),
 }
 
 impl MergeFileView {
@@ -121,7 +119,7 @@ impl MergeFileView {
     }
 
     pub fn write(&mut self) -> Result<(), WriteError> {
-        let lines = render_merge_file(&self.merge_file)?;
+        let lines = render_merge_file(&self.merge_file);
         let file = File::create(&self.file_path)?;
         let mut writer = BufWriter::new(file);
         for line in lines {

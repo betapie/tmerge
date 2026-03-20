@@ -26,6 +26,5 @@ pub struct Conflict {
 pub enum Resolution {
     Ours,
     Theirs,
-    Base,
     Edited(Vec<String>),
 }
