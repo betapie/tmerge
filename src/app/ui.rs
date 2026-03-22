@@ -55,11 +55,11 @@ mod merge_file_view {
         layout::{Constraint, Direction, Layout, Rect},
         style::{Color, Modifier, Style},
         text::{Line, Span, Text},
-        widgets::{Block, BorderType, Borders, Paragraph},
+        widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
     };
 
     use crate::{
-        app::merge_file_view::MergeFileView,
+        app::{merge_file_view::MergeFileView, ui::centered_rect},
         core::{
             model::{Block as MergeBlock, Conflict, ConflictSegment, Resolution},
             renderer::render_conflict,
@@ -90,10 +90,18 @@ mod merge_file_view {
         render_statusbar(merge_file_view, frame, outer[0]);
         render_panels(merge_file_view, frame, outer[1]);
         render_footer(frame, outer[2]);
+
+        if merge_file_view.show_help {
+            render_help(frame);
+        }
     }
 
     fn render_statusbar(merge_file_view: &MergeFileView, frame: &mut Frame, area: Rect) {
-        let dirty = if merge_file_view.is_dirty { "[*] " } else { "    " };
+        let dirty = if merge_file_view.is_dirty {
+            "[*] "
+        } else {
+            "    "
+        };
 
         let conflict_info = match merge_file_view.current_conflict_idx() {
             Some(n) => format!(
@@ -374,24 +382,10 @@ mod merge_file_view {
 
     fn render_footer(frame: &mut Frame, area: Rect) {
         let line = Line::from(vec![
-            key(" n/p "),
-            desc(" next/prev conflict  "),
-            key(" C-n/C-p "),
-            desc(" next/prev unresolved  "),
-            key(" j/k "),
-            desc(" scroll  "),
-            key("  o  "),
-            desc(" ours  "),
-            key("  t  "),
-            desc(" theirs  "),
-            key("  e  "),
-            desc(" edit  "),
-            key("  c  "),
-            desc(" clear  "),
-            key("  w  "),
-            desc(" write  "),
             key("  q  "),
             desc(" quit  "),
+            key("  ?  "),
+            desc(" show help  "),
         ]);
         frame.render_widget(Paragraph::new(line), area);
     }
@@ -408,5 +402,64 @@ mod merge_file_view {
 
     fn desc(s: &str) -> Span<'static> {
         Span::styled(s.to_string(), Style::default().fg(COLOR_LIGHT_BG))
+    }
+
+    fn render_help(frame: &mut Frame) {
+        let area = frame.area();
+        let help_modal_area = centered_rect(60, 70, area);
+        frame.render_widget(Clear, help_modal_area);
+
+        let block = Block::default()
+            .title("Help")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Double);
+
+        let lines = help_lines();
+        let paragraph = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, help_modal_area);
+    }
+
+    fn help_lines() -> Vec<Line<'static>> {
+        vec![
+            Line::from(""),
+            section("Navigation"),
+            binding("j / k / ↑ / ↓", "scroll"),
+            binding("d / u", "half page scroll"),
+            binding("n / p", "next / prev conflict"),
+            binding("C-n / C-p", "next / prev unresolved"),
+            Line::from(""),
+            section("Resolution"),
+            binding("o", "use ours"),
+            binding("t", "use theirs"),
+            binding("c", "clear resolution"),
+            binding("e", "edit in $EDITOR"),
+            Line::from(""),
+            section("File"),
+            binding("w", "write"),
+            binding("q", "quit"),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "  Esc / ? to close",
+                Style::default().fg(Color::DarkGray),
+            )]),
+        ]
+    }
+
+    fn section(title: &'static str) -> Line<'static> {
+        Line::from(vec![Span::styled(
+            format!("  {}", title),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )])
+    }
+
+    fn binding(key: &'static str, desc: &'static str) -> Line<'static> {
+        Line::from(vec![
+            Span::styled(format!("  {:<20}", key), Style::default().fg(Color::White)),
+            Span::styled(desc, Style::default().fg(Color::DarkGray)),
+        ])
     }
 }

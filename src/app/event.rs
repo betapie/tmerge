@@ -52,56 +52,66 @@ mod merge_file_view {
         key: KeyEvent,
         force_redraw: &mut bool,
     ) -> Result<(), String> {
-        match key.code {
-            KeyCode::Char('j') | KeyCode::Down => merge_file_view.scroll_down(1),
-            KeyCode::Char('k') | KeyCode::Up => merge_file_view.scroll_up(1),
-            KeyCode::Char('d') => merge_file_view.scroll_down(10),
-            KeyCode::Char('u') => merge_file_view.scroll_up(10),
-            KeyCode::Char('n') => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    merge_file_view.jump_to_next_unresolved();
-                } else {
-                    merge_file_view.jump_to_next_conflict();
+        if merge_file_view.show_help {
+            match key.code {
+                KeyCode::Char('?') | KeyCode::Esc => {
+                    merge_file_view.show_help = false;
                 }
+                _ => {}
             }
-            KeyCode::Char('p') => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    merge_file_view.jump_to_prev_unresolved();
-                } else {
-                    merge_file_view.jump_to_prev_conflict();
+        } else {
+            match key.code {
+                KeyCode::Char('?') => merge_file_view.show_help = true,
+                KeyCode::Char('j') | KeyCode::Down => merge_file_view.scroll_down(1),
+                KeyCode::Char('k') | KeyCode::Up => merge_file_view.scroll_up(1),
+                KeyCode::Char('d') => merge_file_view.scroll_down(10),
+                KeyCode::Char('u') => merge_file_view.scroll_up(10),
+                KeyCode::Char('n') => {
+                    if key.modifiers.contains(KeyModifiers::CONTROL) {
+                        merge_file_view.jump_to_next_unresolved();
+                    } else {
+                        merge_file_view.jump_to_next_conflict();
+                    }
                 }
-            }
-            KeyCode::Char('o') => {
-                merge_file_view.resolve_current(Resolution::Ours);
-            }
-            KeyCode::Char('t') => {
-                merge_file_view.resolve_current(Resolution::Theirs);
-            }
-            KeyCode::Char('e') => {
-                if let Some(conflict) = merge_file_view.current_conflict() {
-                    let conflict_lines = render_conflict(conflict);
-                    let edit_result = editor::edit(&conflict_lines);
-                    *force_redraw = true;
-                    match edit_result {
-                        Ok(edited) => {
-                            if edited != conflict_lines {
-                                merge_file_view.resolve_current(Resolution::Edited(edited));
+                KeyCode::Char('p') => {
+                    if key.modifiers.contains(KeyModifiers::CONTROL) {
+                        merge_file_view.jump_to_prev_unresolved();
+                    } else {
+                        merge_file_view.jump_to_prev_conflict();
+                    }
+                }
+                KeyCode::Char('o') => {
+                    merge_file_view.resolve_current(Resolution::Ours);
+                }
+                KeyCode::Char('t') => {
+                    merge_file_view.resolve_current(Resolution::Theirs);
+                }
+                KeyCode::Char('e') => {
+                    if let Some(conflict) = merge_file_view.current_conflict() {
+                        let conflict_lines = render_conflict(conflict);
+                        let edit_result = editor::edit(&conflict_lines);
+                        *force_redraw = true;
+                        match edit_result {
+                            Ok(edited) => {
+                                if edited != conflict_lines {
+                                    merge_file_view.resolve_current(Resolution::Edited(edited));
+                                }
                             }
-                        }
-                        Err(error) => {
-                            return Err(error.to_string());
+                            Err(error) => {
+                                return Err(error.to_string());
+                            }
                         }
                     }
                 }
+                KeyCode::Char('c') => merge_file_view.unresolve_current(),
+                KeyCode::Char('w') => match merge_file_view.write() {
+                    Ok(_) => {}
+                    Err(error) => {
+                        return Err(error.to_string());
+                    }
+                },
+                _ => {}
             }
-            KeyCode::Char('c') => merge_file_view.unresolve_current(),
-            KeyCode::Char('w') => match merge_file_view.write() {
-                Ok(_) => {}
-                Err(error) => {
-                    return Err(error.to_string());
-                }
-            },
-            _ => {}
         }
         Ok(())
     }
