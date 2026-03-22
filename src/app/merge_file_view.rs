@@ -79,6 +79,8 @@ pub struct MergeFileView {
     pub unresolved_conflict_block_indices: Vec<usize>,
 
     pub is_dirty: bool,
+
+    pub show_help: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -114,6 +116,7 @@ impl MergeFileView {
                 conflict_block_indices,
                 unresolved_conflict_block_indices,
                 is_dirty: false,
+                show_help: false,
             })
         }
     }
