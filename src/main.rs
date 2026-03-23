@@ -16,13 +16,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use app::app::App;
 
 fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: mergetool <file>");
-        std::process::exit(1);
-    }
-
-    let path = PathBuf::from(&args[1]);
+    let path = resolve_input_file();
     let file = std::fs::File::open(&path)?;
     let reader = BufReader::new(file);
     let mut parser = core::parser::Parser::new();
@@ -47,6 +41,23 @@ fn main() -> anyhow::Result<()> {
     terminal.show_cursor()?;
 
     result
+}
+
+fn resolve_input_file() -> PathBuf {
+    if let Ok(merged) = std::env::var("MERGED") {
+        return PathBuf::from(merged);
+    }
+
+    let args: Vec<String> = env::args().collect();
+    match args.len() {
+        2 => PathBuf::from(&args[1]),
+        5 => PathBuf::from(&args[4]),
+        _ => {
+            eprintln!("Usage: tmerge <file>");
+            eprintln!("       tmerge BASE LOCAL REMOTE MERGED");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> anyhow::Result<()> {
