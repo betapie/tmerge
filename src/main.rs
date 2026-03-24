@@ -13,7 +13,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use app::app::App;
+use app::app_state::AppState;
 
 fn main() -> anyhow::Result<()> {
     let path = resolve_input_file();
@@ -26,7 +26,7 @@ fn main() -> anyhow::Result<()> {
     }
     let merge_file = parser.into_merge_file()?;
 
-    let mut app = App::new(merge_file, path.clone())?;
+    let mut app_state = AppState::new(merge_file, path.clone())?;
 
     enable_raw_mode()?;
     let mut stdout = stdout();
@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let result = run(&mut terminal, &mut app);
+    let result = run(&mut terminal, &mut app_state);
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -60,17 +60,20 @@ fn resolve_input_file() -> PathBuf {
     }
 }
 
-fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> anyhow::Result<()> {
+fn run(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app_state: &mut AppState,
+) -> anyhow::Result<()> {
     loop {
-        terminal.draw(|frame| app::ui::render(app, frame))?;
-        app::event::handle_events(app)?;
+        terminal.draw(|frame| app::render(app_state, frame))?;
+        app::handle_events(app_state)?;
 
-        if app.force_redraw {
-            app.force_redraw = false;
+        if app_state.force_redraw {
+            app_state.force_redraw = false;
             terminal.clear()?;
         }
 
-        if app.should_quit {
+        if app_state.should_quit {
             break;
         }
     }
