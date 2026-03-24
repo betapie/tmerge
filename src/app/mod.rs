@@ -1,5 +1,8 @@
-pub mod app;
-pub mod editor;
+pub mod app_state;
 pub mod event;
-pub mod merge_file_view;
+pub mod render;
 pub mod ui;
+pub mod views;
+
+pub use render::render;
+pub use event::handle_events;

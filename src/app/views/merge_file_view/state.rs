@@ -67,7 +67,7 @@ impl fmt::Display for InvalidInputError {
 
 impl std::error::Error for InvalidInputError {}
 
-pub struct MergeFileView {
+pub struct State {
     pub merge_file: MergeFile,
     pub file_path: std::path::PathBuf,
 
@@ -89,11 +89,11 @@ pub enum WriteError {
     Io(#[from] std::io::Error),
 }
 
-impl MergeFileView {
+impl State {
     pub fn new(
         merge_file: MergeFile,
         file_path: std::path::PathBuf,
-    ) -> Result<MergeFileView, InvalidInputError> {
+    ) -> Result<State, InvalidInputError> {
         if merge_file.blocks.is_empty() {
             Err(InvalidInputError::new(String::from(
                 "Merge file must have at least one block",
@@ -107,7 +107,7 @@ impl MergeFileView {
                 .unwrap_or(0);
             let line_in_block = 0;
             let global_block_lengths = calculate_global_block_lengths(&merge_file);
-            Ok(MergeFileView {
+            Ok(State {
                 merge_file,
                 file_path,
                 current_block_idx,
@@ -291,10 +291,10 @@ mod tests {
     use crate::core::test_helpers;
 
     #[test]
-    fn new_merge_file_view_from_empty_merge_file_returns_err() {
+    fn new_state_from_empty_merge_file_returns_err() {
         let merge_file = MergeFile { blocks: Vec::new() };
         let filepath = std::path::PathBuf::from("test/path.ext");
-        let view = MergeFileView::new(merge_file, filepath);
+        let view = State::new(merge_file, filepath);
         assert!(view.is_err());
     }
 
@@ -310,7 +310,7 @@ mod tests {
         ]);
         let filepath = std::path::PathBuf::from("test/path.ext");
 
-        let view = MergeFileView::new(merge_file, filepath);
+        let view = State::new(merge_file, filepath);
         assert!(view.is_ok());
     }
 
@@ -327,10 +327,10 @@ mod tests {
         ]);
         let filepath = std::path::PathBuf::from("test/path.ext");
 
-        let merge_file_view = MergeFileView::new(merge_file, filepath)?;
-        assert_eq!(merge_file_view.num_conflicts(), 1);
-        assert_eq!(merge_file_view.num_unresolved(), 1);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(0)));
+        let state = State::new(merge_file, filepath)?;
+        assert_eq!(state.num_conflicts(), 1);
+        assert_eq!(state.num_unresolved(), 1);
+        assert!(matches!(state.current_conflict_idx(), Some(0)));
         Ok(())
     }
 
@@ -345,57 +345,54 @@ mod tests {
             test_helpers::BlockType::Regular,
         ]);
         let filepath = std::path::PathBuf::from("test/path.ext");
-        let mut merge_file_view = MergeFileView::new(merge_file, filepath)?;
+        let mut state = State::new(merge_file, filepath)?;
 
         let expected_global_block_lengths = vec![4, 10, 4];
-        assert_eq!(
-            merge_file_view.global_block_lengths,
-            expected_global_block_lengths,
-        );
+        assert_eq!(state.global_block_lengths, expected_global_block_lengths,);
 
-        assert_eq!(merge_file_view.current_block_idx, 1);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(0)));
+        assert_eq!(state.current_block_idx, 1);
+        assert_eq!(state.current_block_line, 0);
+        assert!(matches!(state.current_conflict_idx(), Some(0)));
 
-        merge_file_view.scroll_down(1);
-        assert_eq!(merge_file_view.current_block_idx, 1);
-        assert_eq!(merge_file_view.current_block_line, 1);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(0)));
+        state.scroll_down(1);
+        assert_eq!(state.current_block_idx, 1);
+        assert_eq!(state.current_block_line, 1);
+        assert!(matches!(state.current_conflict_idx(), Some(0)));
 
-        merge_file_view.scroll_up(1);
-        assert_eq!(merge_file_view.current_block_idx, 1);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(0)));
+        state.scroll_up(1);
+        assert_eq!(state.current_block_idx, 1);
+        assert_eq!(state.current_block_line, 0);
+        assert!(matches!(state.current_conflict_idx(), Some(0)));
 
-        merge_file_view.scroll_up(2);
-        assert_eq!(merge_file_view.current_block_idx, 0);
-        assert_eq!(merge_file_view.current_block_line, 2);
-        assert!(merge_file_view.current_conflict_idx().is_none());
+        state.scroll_up(2);
+        assert_eq!(state.current_block_idx, 0);
+        assert_eq!(state.current_block_line, 2);
+        assert!(state.current_conflict_idx().is_none());
 
-        merge_file_view.scroll_up(2);
-        assert_eq!(merge_file_view.current_block_idx, 0);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(merge_file_view.current_conflict_idx().is_none());
+        state.scroll_up(2);
+        assert_eq!(state.current_block_idx, 0);
+        assert_eq!(state.current_block_line, 0);
+        assert!(state.current_conflict_idx().is_none());
 
-        merge_file_view.scroll_up(2);
-        assert_eq!(merge_file_view.current_block_idx, 0);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(merge_file_view.current_conflict_idx().is_none());
+        state.scroll_up(2);
+        assert_eq!(state.current_block_idx, 0);
+        assert_eq!(state.current_block_line, 0);
+        assert!(state.current_conflict_idx().is_none());
 
-        merge_file_view.scroll_down(8);
-        assert_eq!(merge_file_view.current_block_idx, 1);
-        assert_eq!(merge_file_view.current_block_line, 4);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(0)));
+        state.scroll_down(8);
+        assert_eq!(state.current_block_idx, 1);
+        assert_eq!(state.current_block_line, 4);
+        assert!(matches!(state.current_conflict_idx(), Some(0)));
 
-        merge_file_view.scroll_down(42);
-        assert_eq!(merge_file_view.current_block_idx, 2);
-        assert_eq!(merge_file_view.current_block_line, 3);
-        assert!(merge_file_view.current_conflict_idx().is_none());
+        state.scroll_down(42);
+        assert_eq!(state.current_block_idx, 2);
+        assert_eq!(state.current_block_line, 3);
+        assert!(state.current_conflict_idx().is_none());
 
-        merge_file_view.scroll_up(42);
-        assert_eq!(merge_file_view.current_block_idx, 0);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(merge_file_view.current_conflict_idx().is_none());
+        state.scroll_up(42);
+        assert_eq!(state.current_block_idx, 0);
+        assert_eq!(state.current_block_line, 0);
+        assert!(state.current_conflict_idx().is_none());
 
         Ok(())
     }
@@ -412,42 +409,39 @@ mod tests {
             test_helpers::BlockType::Diff3,
         ]);
         let filepath = std::path::PathBuf::from("test/path.ext");
-        let mut merge_file_view = MergeFileView::new(merge_file, filepath)?;
+        let mut state = State::new(merge_file, filepath)?;
 
         let expected_global_block_lengths = vec![4, 10, 4, 10];
-        assert_eq!(
-            merge_file_view.global_block_lengths,
-            expected_global_block_lengths,
-        );
+        assert_eq!(state.global_block_lengths, expected_global_block_lengths,);
 
-        assert_eq!(merge_file_view.current_block_idx, 1);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(0)));
+        assert_eq!(state.current_block_idx, 1);
+        assert_eq!(state.current_block_line, 0);
+        assert!(matches!(state.current_conflict_idx(), Some(0)));
 
-        merge_file_view.jump_to_next_conflict();
-        assert_eq!(merge_file_view.current_block_idx, 3);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(1)));
+        state.jump_to_next_conflict();
+        assert_eq!(state.current_block_idx, 3);
+        assert_eq!(state.current_block_line, 0);
+        assert!(matches!(state.current_conflict_idx(), Some(1)));
 
-        merge_file_view.jump_to_next_conflict();
-        assert_eq!(merge_file_view.current_block_idx, 3);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(1)));
+        state.jump_to_next_conflict();
+        assert_eq!(state.current_block_idx, 3);
+        assert_eq!(state.current_block_line, 0);
+        assert!(matches!(state.current_conflict_idx(), Some(1)));
 
-        merge_file_view.scroll_down(7);
-        assert_eq!(merge_file_view.current_block_idx, 3);
-        assert_eq!(merge_file_view.current_block_line, 7);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(1)));
+        state.scroll_down(7);
+        assert_eq!(state.current_block_idx, 3);
+        assert_eq!(state.current_block_line, 7);
+        assert!(matches!(state.current_conflict_idx(), Some(1)));
 
-        merge_file_view.jump_to_prev_conflict();
-        assert_eq!(merge_file_view.current_block_idx, 1);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(0)));
+        state.jump_to_prev_conflict();
+        assert_eq!(state.current_block_idx, 1);
+        assert_eq!(state.current_block_line, 0);
+        assert!(matches!(state.current_conflict_idx(), Some(0)));
 
-        merge_file_view.jump_to_prev_conflict();
-        assert_eq!(merge_file_view.current_block_idx, 1);
-        assert_eq!(merge_file_view.current_block_line, 0);
-        assert!(matches!(merge_file_view.current_conflict_idx(), Some(0)));
+        state.jump_to_prev_conflict();
+        assert_eq!(state.current_block_idx, 1);
+        assert_eq!(state.current_block_line, 0);
+        assert!(matches!(state.current_conflict_idx(), Some(0)));
 
         Ok(())
     }
@@ -464,18 +458,18 @@ mod tests {
             test_helpers::BlockType::Diff3,
         ]);
         let filepath = std::path::PathBuf::from("test/path.ext");
-        let mut merge_file_view = MergeFileView::new(merge_file, filepath)?;
+        let mut state = State::new(merge_file, filepath)?;
 
-        let num_conflicts_before = merge_file_view.num_conflicts();
-        let num_unresolved_before = merge_file_view.num_unresolved();
+        let num_conflicts_before = state.num_conflicts();
+        let num_unresolved_before = state.num_unresolved();
 
-        merge_file_view.scroll_up(1);
-        assert!(merge_file_view.current_conflict_idx().is_none());
+        state.scroll_up(1);
+        assert!(state.current_conflict_idx().is_none());
 
-        merge_file_view.resolve_current(Resolution::Ours);
+        state.resolve_current(Resolution::Ours);
 
-        let num_conflicts = merge_file_view.num_conflicts();
-        let num_unresolved = merge_file_view.num_unresolved();
+        let num_conflicts = state.num_conflicts();
+        let num_unresolved = state.num_unresolved();
 
         assert_eq!(num_conflicts_before, num_conflicts);
         assert_eq!(num_unresolved_before, num_unresolved);
@@ -496,48 +490,36 @@ mod tests {
             test_helpers::BlockType::Diff3,
         ]);
         let filepath = std::path::PathBuf::from("test/path.ext");
-        let mut merge_file_view = MergeFileView::new(merge_file, filepath)?;
+        let mut state = State::new(merge_file, filepath)?;
 
         let expected_global_block_lengths = vec![4, 10, 4, 10];
-        assert_eq!(
-            merge_file_view.global_block_lengths,
-            expected_global_block_lengths,
-        );
-        let num_conflicts_before = merge_file_view.num_conflicts();
-        let num_unresolved_before = merge_file_view.num_unresolved();
-        assert!(merge_file_view.current_conflict_idx().is_some());
-        assert!(
-            merge_file_view
-                .current_conflict()
-                .unwrap()
-                .resolution
-                .is_none()
-        );
+        assert_eq!(state.global_block_lengths, expected_global_block_lengths,);
+        let num_conflicts_before = state.num_conflicts();
+        let num_unresolved_before = state.num_unresolved();
+        assert!(state.current_conflict_idx().is_some());
+        assert!(state.current_conflict().unwrap().resolution.is_none());
 
-        merge_file_view.resolve_current(Resolution::Ours);
+        state.resolve_current(Resolution::Ours);
 
-        let num_conflicts = merge_file_view.num_conflicts();
-        let num_unresolved = merge_file_view.num_unresolved();
+        let num_conflicts = state.num_conflicts();
+        let num_unresolved = state.num_unresolved();
 
         assert_eq!(num_conflicts_before, num_conflicts);
         assert_eq!(num_unresolved_before, num_unresolved + 1);
 
-        assert!(merge_file_view.current_conflict_idx().is_some());
+        assert!(state.current_conflict_idx().is_some());
         assert!(matches!(
-            merge_file_view.current_conflict().unwrap().resolution,
+            state.current_conflict().unwrap().resolution,
             Some(Resolution::Ours)
         ));
 
         let expected_global_block_lengths = vec![4, 3, 4, 10];
-        assert_eq!(
-            merge_file_view.global_block_lengths,
-            expected_global_block_lengths,
-        );
+        assert_eq!(state.global_block_lengths, expected_global_block_lengths,);
 
         Ok(())
     }
 
-    fn make_merge_file_view_and_resolve_first() -> MergeFileView {
+    fn make_state_and_resolve_first() -> State {
         let test_helpers::TestMergeFile {
             raw_lines: _,
             parsed: merge_file,
@@ -548,102 +530,78 @@ mod tests {
             test_helpers::BlockType::Diff3,
         ]);
         let filepath = std::path::PathBuf::from("test/path.ext");
-        let mut merge_file_view = MergeFileView::new(merge_file, filepath).unwrap();
+        let mut state = State::new(merge_file, filepath).unwrap();
 
         let expected_global_block_lengths = vec![4, 10, 4, 10];
-        assert_eq!(
-            merge_file_view.global_block_lengths,
-            expected_global_block_lengths,
-        );
-        let num_conflicts_before = merge_file_view.num_conflicts();
-        let num_unresolved_before = merge_file_view.num_unresolved();
-        assert!(merge_file_view.current_conflict_idx().is_some());
-        assert!(
-            merge_file_view
-                .current_conflict()
-                .unwrap()
-                .resolution
-                .is_none()
-        );
+        assert_eq!(state.global_block_lengths, expected_global_block_lengths,);
+        let num_conflicts_before = state.num_conflicts();
+        let num_unresolved_before = state.num_unresolved();
+        assert!(state.current_conflict_idx().is_some());
+        assert!(state.current_conflict().unwrap().resolution.is_none());
 
-        merge_file_view.resolve_current(Resolution::Ours);
+        state.resolve_current(Resolution::Ours);
 
-        let num_conflicts = merge_file_view.num_conflicts();
-        let num_unresolved = merge_file_view.num_unresolved();
+        let num_conflicts = state.num_conflicts();
+        let num_unresolved = state.num_unresolved();
 
         assert_eq!(num_conflicts_before, num_conflicts);
         assert_eq!(num_unresolved_before, num_unresolved + 1);
 
-        assert!(merge_file_view.current_conflict_idx().is_some());
+        assert!(state.current_conflict_idx().is_some());
         assert!(matches!(
-            merge_file_view.current_conflict().unwrap().resolution,
+            state.current_conflict().unwrap().resolution,
             Some(Resolution::Ours)
         ));
 
         let expected_global_block_lengths = vec![4, 3, 4, 10];
-        assert_eq!(
-            merge_file_view.global_block_lengths,
-            expected_global_block_lengths,
-        );
-        merge_file_view
+        assert_eq!(state.global_block_lengths, expected_global_block_lengths,);
+        state
     }
 
     #[test]
     fn resolve_current_when_already_resolved_changes_resolution_state() {
-        let mut merge_file_view = make_merge_file_view_and_resolve_first();
+        let mut state = make_state_and_resolve_first();
 
-        let num_conflicts_before = merge_file_view.num_conflicts();
-        let num_unresolved_before = merge_file_view.num_unresolved();
+        let num_conflicts_before = state.num_conflicts();
+        let num_unresolved_before = state.num_unresolved();
 
-        merge_file_view.resolve_current(Resolution::Theirs);
+        state.resolve_current(Resolution::Theirs);
 
-        let num_conflicts = merge_file_view.num_conflicts();
-        let num_unresolved = merge_file_view.num_unresolved();
+        let num_conflicts = state.num_conflicts();
+        let num_unresolved = state.num_unresolved();
 
         assert_eq!(num_conflicts_before, num_conflicts);
         assert_eq!(num_unresolved_before, num_unresolved);
 
-        assert!(merge_file_view.current_conflict_idx().is_some());
+        assert!(state.current_conflict_idx().is_some());
         assert!(matches!(
-            merge_file_view.current_conflict().unwrap().resolution,
+            state.current_conflict().unwrap().resolution,
             Some(Resolution::Theirs)
         ));
 
         let expected_global_block_lengths = vec![4, 3, 4, 10];
-        assert_eq!(
-            merge_file_view.global_block_lengths,
-            expected_global_block_lengths,
-        );
+        assert_eq!(state.global_block_lengths, expected_global_block_lengths,);
     }
 
     #[test]
     fn unresolve_current_when_already_resolved_resets_resolution_and_recomputes() {
-        let mut merge_file_view = make_merge_file_view_and_resolve_first();
+        let mut state = make_state_and_resolve_first();
 
-        let num_conflicts_before = merge_file_view.num_conflicts();
-        let num_unresolved_before = merge_file_view.num_unresolved();
+        let num_conflicts_before = state.num_conflicts();
+        let num_unresolved_before = state.num_unresolved();
 
-        merge_file_view.unresolve_current();
+        state.unresolve_current();
 
-        let num_conflicts = merge_file_view.num_conflicts();
-        let num_unresolved = merge_file_view.num_unresolved();
+        let num_conflicts = state.num_conflicts();
+        let num_unresolved = state.num_unresolved();
 
         assert_eq!(num_conflicts_before, num_conflicts);
         assert_eq!(num_unresolved_before + 1, num_unresolved);
 
-        assert!(merge_file_view.current_conflict_idx().is_some());
-        assert!(
-            merge_file_view
-                .current_conflict()
-                .unwrap()
-                .resolution
-                .is_none()
-        );
+        assert!(state.current_conflict_idx().is_some());
+        assert!(state.current_conflict().unwrap().resolution.is_none());
 
         let expected_global_block_lengths = vec![4, 10, 4, 10];
-        assert_eq!(
-            merge_file_view.global_block_lengths,
-            expected_global_block_lengths,
-        );
+        assert_eq!(state.global_block_lengths, expected_global_block_lengths,);
     }
 }
