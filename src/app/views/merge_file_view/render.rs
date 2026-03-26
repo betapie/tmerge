@@ -7,7 +7,10 @@ use ratatui::{
 };
 
 use crate::{
-    app::{ui::common::centered_rect, views::merge_file_view},
+    app::{
+        ui::{self, common::centered_rect},
+        views::merge_file_view,
+    },
     core::{
         model::{Block as MergeBlock, Conflict, ConflictSegment, Resolution},
         renderer::render_conflict,
@@ -39,8 +42,15 @@ pub fn render(state: &merge_file_view::State, frame: &mut Frame) {
     render_panels(state, frame, outer[1]);
     render_footer(frame, outer[2]);
 
-    if state.show_help {
-        render_help(frame);
+    if let Some(modal) = &state.current_modal {
+        match modal {
+            merge_file_view::Modal::Help => {
+                render_help(frame);
+            }
+            merge_file_view::Modal::ResolutionSelection(selection_dialog) => {
+                ui::selection_dialog::render(&selection_dialog, frame);
+            }
+        }
     }
     if let Some(error) = &state.current_error {
         render_error(&error, frame);
@@ -368,6 +378,7 @@ fn help_lines() -> Vec<Line<'static>> {
         binding("t", "use theirs"),
         binding("c", "clear resolution"),
         binding("e", "edit in $EDITOR"),
+        binding("r", "all resolution options"),
         Line::from(""),
         section("File"),
         binding("w", "write"),
