@@ -42,6 +42,9 @@ pub fn render(state: &merge_file_view::State, frame: &mut Frame) {
     if state.show_help {
         render_help(frame);
     }
+    if let Some(error) = &state.current_error {
+        render_error(&error, frame);
+    }
 }
 
 fn render_statusbar(state: &merge_file_view::State, frame: &mut Frame, area: Rect) {
@@ -391,4 +394,21 @@ fn binding(key: &'static str, desc: &'static str) -> Line<'static> {
         Span::styled(format!("  {:<20}", key), Style::default().fg(Color::White)),
         Span::styled(desc, Style::default().fg(Color::DarkGray)),
     ])
+}
+
+fn render_error(error_message: &str, frame: &mut Frame) {
+    let area = frame.area();
+    let error_modal_area = centered_rect(50, 50, area);
+    frame.render_widget(Clear, error_modal_area);
+
+    let block = Block::default()
+        .title("Something went wrong")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Double)
+        .border_style(Style::default().fg(Color::Red));
+
+    let text = format!("{}\n\nPress Enter or Esc to dismiss", error_message);
+    let para = Paragraph::new(text).block(block).wrap(Wrap { trim: false });
+
+    frame.render_widget(para, error_modal_area);
 }
