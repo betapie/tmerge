@@ -16,41 +16,55 @@ pub fn render_merge_file(merge_file: &MergeFile) -> Vec<String> {
     result
 }
 
+fn render_unresolved(conflict: &Conflict) -> Vec<String> {
+    let mut result = Vec::new();
+    result.push(if let Some(tag) = &conflict.ours.tag {
+        format!("{} {}", markers::OURS_BEGIN, tag)
+    } else {
+        markers::OURS_BEGIN.into()
+    });
+    result.extend(conflict.ours.lines.clone());
+    if let Some(base) = &conflict.base {
+        result.push(if let Some(tag) = &base.tag {
+            format!("{} {}", markers::BASE_BEGIN, tag)
+        } else {
+            markers::BASE_BEGIN.into()
+        });
+        result.extend(base.lines.clone());
+    }
+    result.push(markers::THEIRS_BEGIN.into());
+    result.extend(conflict.theirs.lines.clone());
+    result.push(if let Some(tag) = &conflict.theirs.tag {
+        format!("{} {}", markers::CONFLICT_END, tag)
+    } else {
+        markers::CONFLICT_END.into()
+    });
+    result
+}
+
 pub fn render_conflict(conflict: &Conflict) -> Vec<String> {
-    let result_lines = match &conflict.resolution {
+    match &conflict.resolution {
         Some(resolution) => match resolution {
             Resolution::Ours => conflict.ours.lines.clone(),
             Resolution::Theirs => conflict.theirs.lines.clone(),
+            Resolution::TheirsBeforeOurs => conflict
+                .theirs
+                .lines
+                .iter()
+                .chain(conflict.ours.lines.iter())
+                .cloned()
+                .collect(),
+            Resolution::OursBeforeTheirs => conflict
+                .ours
+                .lines
+                .iter()
+                .chain(conflict.theirs.lines.iter())
+                .cloned()
+                .collect(),
             Resolution::Edited(lines) => lines.clone(),
         },
-        None => {
-            let mut result = Vec::new();
-            result.push(if let Some(tag) = &conflict.ours.tag {
-                format!("{} {}", markers::OURS_BEGIN, tag)
-            } else {
-                markers::OURS_BEGIN.into()
-            });
-            result.extend(conflict.ours.lines.clone());
-            if let Some(base) = &conflict.base {
-                result.push(if let Some(tag) = &base.tag {
-                    format!("{} {}", markers::BASE_BEGIN, tag)
-                } else {
-                    markers::BASE_BEGIN.into()
-                });
-                result.extend(base.lines.clone());
-            }
-            result.push(markers::THEIRS_BEGIN.into());
-            result.extend(conflict.theirs.lines.clone());
-            result.push(if let Some(tag) = &conflict.theirs.tag {
-                format!("{} {}", markers::CONFLICT_END, tag)
-            } else {
-                markers::CONFLICT_END.into()
-            });
-
-            result
-        }
-    };
-    result_lines
+        None => render_unresolved(conflict),
+    }
 }
 
 #[cfg(test)]
@@ -122,6 +136,42 @@ mod tests {
         conflict.resolution = Some(Resolution::Theirs);
         let rendered = render_conflict(&conflict);
         assert_eq!(rendered, conflict.theirs.lines);
+    }
+
+    #[test]
+    fn render_conflict_on_diff3_block_when_resolved_with_theirs_before_ours_returs_expected() {
+        let test_helpers::TestConflict {
+            raw_lines: _,
+            parsed: mut conflict,
+        } = test_helpers::make_diff3_conflict();
+        conflict.resolution = Some(Resolution::TheirsBeforeOurs);
+        let rendered = render_conflict(&conflict);
+        let expected = conflict
+            .theirs
+            .lines
+            .iter()
+            .chain(conflict.ours.lines.iter())
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(rendered, expected);
+    }
+
+    #[test]
+    fn render_conflict_on_diff3_block_when_resolved_with_ours_before_theirs_returs_expected() {
+        let test_helpers::TestConflict {
+            raw_lines: _,
+            parsed: mut conflict,
+        } = test_helpers::make_diff3_conflict();
+        conflict.resolution = Some(Resolution::OursBeforeTheirs);
+        let rendered = render_conflict(&conflict);
+        let expected = conflict
+            .ours
+            .lines
+            .iter()
+            .chain(conflict.theirs.lines.iter())
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(rendered, expected);
     }
 
     #[test]
@@ -219,8 +269,9 @@ mod tests {
         }
 
         if let Block::Conflict(conflict) = &mut merge_file.blocks[2] {
-            conflict.resolution = Some(Resolution::Theirs);
+            conflict.resolution = Some(Resolution::TheirsBeforeOurs);
             expected_renderd.extend(conflict.theirs.lines.clone());
+            expected_renderd.extend(conflict.ours.lines.clone());
         } else {
             panic!("Expected third block to be conflict block");
         }
