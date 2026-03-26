@@ -81,6 +81,7 @@ pub struct State {
     pub is_dirty: bool,
 
     pub show_help: bool,
+    pub current_error: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -117,6 +118,7 @@ impl State {
                 unresolved_conflict_block_indices,
                 is_dirty: false,
                 show_help: false,
+                current_error: None,
             })
         }
     }

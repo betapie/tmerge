@@ -25,18 +25,7 @@ fn handle_key(app_state: &mut AppState, key: KeyEvent) {
         }
         _ => {}
     }
-    if app_state.current_error.is_some() {
-        match key.code {
-            KeyCode::Enter | KeyCode::Esc => {
-                app_state.current_error = None;
-            }
-            _ => {}
-        }
-        return;
-    }
 
     let view = &mut app_state.view_state;
-    if let Err(error) = views::merge_file_view::handle_key(view, key, &mut app_state.force_redraw) {
-        app_state.current_error = Some(error);
-    }
+    views::merge_file_view::handle_key(view, key, &mut app_state.force_redraw);
 }

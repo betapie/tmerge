@@ -9,10 +9,6 @@ use crate::app::{app_state::AppState, ui::common::centered_rect, views};
 pub fn render(app_state: &AppState, frame: &mut Frame) {
     let view = &app_state.view_state;
     views::merge_file_view::render(view, frame);
-
-    if let Some(error) = &app_state.current_error {
-        render_error(error, frame);
-    }
 }
 
 fn render_error(error_message: &str, frame: &mut Frame) {

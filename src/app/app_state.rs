@@ -5,7 +5,6 @@ pub struct AppState {
     pub view_state: merge_file_view::State,
     pub should_quit: bool,
     pub force_redraw: bool,
-    pub current_error: Option<String>,
 }
 
 impl AppState {
@@ -18,7 +17,6 @@ impl AppState {
             view_state,
             should_quit: false,
             force_redraw: false,
-            current_error: None,
         })
     }
 }
