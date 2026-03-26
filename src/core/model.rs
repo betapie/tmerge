@@ -26,5 +26,7 @@ pub struct Conflict {
 pub enum Resolution {
     Ours,
     Theirs,
+    TheirsBeforeOurs,
+    OursBeforeTheirs,
     Edited(Vec<String>),
 }
