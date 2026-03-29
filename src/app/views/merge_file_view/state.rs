@@ -4,9 +4,12 @@ use std::{
     io::{BufWriter, Write},
 };
 
-use crate::core::{
-    model::{Block, Conflict, MergeFile, Resolution},
-    renderer::{render_conflict, render_merge_file},
+use crate::{
+    app::ui::selection_dialog,
+    core::{
+        model::{Block, Conflict, MergeFile, Resolution},
+        renderer::{render_conflict, render_merge_file},
+    },
 };
 
 fn collect_conflict_block_indices(merge_file: &MergeFile) -> Vec<usize> {
@@ -67,6 +70,11 @@ impl fmt::Display for InvalidInputError {
 
 impl std::error::Error for InvalidInputError {}
 
+pub enum Modal {
+    Help,
+    ResolutionSelection(selection_dialog::State<Resolution>),
+}
+
 pub struct State {
     pub merge_file: MergeFile,
     pub file_path: std::path::PathBuf,
@@ -80,7 +88,7 @@ pub struct State {
 
     pub is_dirty: bool,
 
-    pub show_help: bool,
+    pub current_modal: Option<Modal>,
     pub current_error: Option<String>,
 }
 
@@ -117,7 +125,7 @@ impl State {
                 conflict_block_indices,
                 unresolved_conflict_block_indices,
                 is_dirty: false,
-                show_help: false,
+                current_modal: None,
                 current_error: None,
             })
         }

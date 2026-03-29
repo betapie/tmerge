@@ -22,7 +22,7 @@ pub struct Conflict {
     pub resolution: Option<Resolution>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Resolution {
     Ours,
     Theirs,
