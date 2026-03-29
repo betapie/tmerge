@@ -17,17 +17,19 @@ pub fn handle_events(app_state: &mut AppState) -> std::io::Result<()> {
     Ok(())
 }
 
-fn handle_key(app_state: &AppState, key: KeyEvent) -> Option<Action> {
+fn handle_key(app_state: &mut AppState, key: KeyEvent) -> Option<Action> {
     match key.code {
         KeyCode::Char('q') => {
-            return Some(Box::new(|app_state| app_state.should_quit = true));
+            app_state.should_quit = true;
+            return None;
         }
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            return Some(Box::new(|app_state| app_state.should_quit = true));
+            app_state.should_quit = true;
+            return None;
         }
         _ => {}
     }
 
-    let view = &app_state.view_state;
+    let view = &mut app_state.view_state;
     views::merge_file_view::handle_key(view, key)
 }
